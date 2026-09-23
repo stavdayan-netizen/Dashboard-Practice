@@ -197,15 +197,28 @@
     return { clean, errors };
   }
 
+  let statusBannerTimer = null;
+
+  function showStatusBanner(message, variant) {
+    const banner = document.getElementById("status-banner");
+    if (statusBannerTimer) {
+      clearTimeout(statusBannerTimer);
+      statusBannerTimer = null;
+    }
+    banner.textContent = message;
+    banner.className = "status-banner status-banner--" + variant;
+    banner.hidden = false;
+    if (variant === "info") {
+      statusBannerTimer = setTimeout(() => { banner.hidden = true; }, 6000);
+    }
+  }
+
   function showValidationBanner(errors) {
     console.error("Maintenance CSV validation errors:\n" + errors.join("\n"));
-    const main = document.getElementById("main-content");
-    const banner = document.createElement("div");
-    banner.className = "validation-banner";
-    banner.setAttribute("role", "alert");
-    banner.style.cssText = "background:#fbe7e5;border:1px solid #e3b3ae;color:#8a2b23;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:0.9rem;";
-    banner.textContent = errors.length + " row(s) in maintenance_requests.csv failed validation and were excluded. See the browser console for details.";
-    main.prepend(banner);
+    showStatusBanner(
+      errors.length + " row(s) in maintenance_requests.csv failed validation and were excluded. See the browser console for details.",
+      "error"
+    );
   }
 
   function showFatalError(message) {
@@ -283,8 +296,9 @@
   // ---- Rendering: header / KPIs --------------------------------------
 
   function populatePropertySelect(rows) {
-    const select = document.getElementById("property-select");
     const properties = Array.from(new Set(rows.map((r) => r.property))).sort();
+
+    const select = document.getElementById("property-select");
     select.innerHTML = "";
     const allOpt = document.createElement("option");
     allOpt.value = ALL_PROPERTIES;
@@ -296,10 +310,24 @@
       opt.textContent = p;
       select.appendChild(opt);
     });
+    if (!properties.includes(state.property) && state.property !== ALL_PROPERTIES) {
+      state.property = ALL_PROPERTIES;
+    }
     select.value = state.property;
-    select.addEventListener("change", () => {
+    // Assigning .onchange (rather than addEventListener) keeps this callable
+    // every time the dataset changes (upload, new request) without stacking
+    // duplicate handlers on the persistent <select> element.
+    select.onchange = () => {
       state.property = select.value;
       renderAll();
+    };
+
+    const datalist = document.getElementById("property-datalist");
+    datalist.innerHTML = "";
+    properties.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      datalist.appendChild(opt);
     });
   }
 
@@ -650,26 +678,182 @@
     }
   }
 
+  function trapFocus(dialogEl, e) {
+    const focusable = dialogEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   function onDialogKeydown(e) {
     if (e.key === "Escape") {
       e.preventDefault();
       closeDialog();
       return;
     }
-    if (e.key === "Tab") {
-      const dialog = document.getElementById("request-dialog");
-      const focusable = dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+    if (e.key === "Tab") trapFocus(document.getElementById("request-dialog"), e);
+  }
+
+  // ---- New Request form ---------------------------------------------
+
+  function populateSelect(selectEl, values) {
+    selectEl.innerHTML = "";
+    values.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  function getNextRequestId() {
+    let max = 0;
+    state.rows.forEach((r) => {
+      const m = /^MR-(\d+)$/.exec(r.id);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return "MR-" + (max + 1);
+  }
+
+  function updateNewRequestConditionalFields() {
+    const status = document.getElementById("nr-status").value;
+    const resolvedWrap = document.getElementById("nr-date-resolved-wrap");
+    const resolvedInput = document.getElementById("nr-date-resolved");
+    const isResolved = status === "Resolved";
+    resolvedWrap.hidden = !isResolved;
+    resolvedInput.required = isResolved;
+    if (isResolved && !resolvedInput.value) resolvedInput.value = AS_OF_DATE;
+    if (!isResolved) resolvedInput.value = "";
+
+    const costInput = document.getElementById("nr-cost");
+    const costDateWrap = document.getElementById("nr-cost-date-wrap");
+    const costDateInput = document.getElementById("nr-cost-date");
+    const hasCost = costInput.value !== "";
+    costDateWrap.hidden = !hasCost;
+    costDateInput.required = hasCost;
+    if (hasCost && !costDateInput.value) {
+      costDateInput.value = isResolved && resolvedInput.value ? resolvedInput.value : AS_OF_DATE;
     }
+    if (!hasCost) costDateInput.value = "";
+  }
+
+  function resetNewRequestForm() {
+    document.getElementById("nr-property").value = "";
+    document.getElementById("nr-tenant").value = "";
+    document.getElementById("nr-issue").value = "";
+    document.getElementById("nr-category").value = CATEGORIES[0];
+    document.getElementById("nr-priority").value = "Medium";
+    document.getElementById("nr-status").value = "New";
+    document.getElementById("nr-assigned").value = "";
+
+    const dateCreated = document.getElementById("nr-date-created");
+    dateCreated.value = AS_OF_DATE;
+    dateCreated.max = AS_OF_DATE;
+
+    const dateResolved = document.getElementById("nr-date-resolved");
+    dateResolved.value = "";
+    dateResolved.min = AS_OF_DATE;
+    dateResolved.max = AS_OF_DATE;
+
+    document.getElementById("nr-cost").value = "";
+    const costDate = document.getElementById("nr-cost-date");
+    costDate.value = "";
+    costDate.min = AS_OF_DATE;
+    costDate.max = AS_OF_DATE;
+
+    document.getElementById("nr-ai-summary").value = "";
+
+    const errorEl = document.getElementById("new-request-error");
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+
+    updateNewRequestConditionalFields();
+  }
+
+  function openNewRequestDialog(triggerEl) {
+    resetNewRequestForm();
+    state.lastFocusedEl = triggerEl;
+    document.getElementById("new-request-overlay").hidden = false;
+    document.getElementById("nr-property").focus();
+    document.addEventListener("keydown", onNewRequestKeydown, true);
+  }
+
+  function closeNewRequestDialog() {
+    document.getElementById("new-request-overlay").hidden = true;
+    document.removeEventListener("keydown", onNewRequestKeydown, true);
+    if (state.lastFocusedEl && typeof state.lastFocusedEl.focus === "function") {
+      state.lastFocusedEl.focus();
+    }
+  }
+
+  function onNewRequestKeydown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeNewRequestDialog();
+      return;
+    }
+    if (e.key === "Tab") trapFocus(document.getElementById("new-request-dialog"), e);
+  }
+
+  function handleNewRequestSubmit(e) {
+    e.preventDefault();
+    const status = document.getElementById("nr-status").value;
+    const costValue = document.getElementById("nr-cost").value;
+
+    const rawRow = {
+      id: getNextRequestId(),
+      date_created: document.getElementById("nr-date-created").value,
+      property: document.getElementById("nr-property").value.trim(),
+      tenant: document.getElementById("nr-tenant").value.trim(),
+      issue: document.getElementById("nr-issue").value.trim(),
+      category: document.getElementById("nr-category").value,
+      priority: document.getElementById("nr-priority").value,
+      status: status,
+      assigned_to: document.getElementById("nr-assigned").value.trim(),
+      date_resolved: status === "Resolved" ? document.getElementById("nr-date-resolved").value : "",
+      cost: costValue !== "" ? costValue : "",
+      cost_date: costValue !== "" ? document.getElementById("nr-cost-date").value : "",
+      ai_summary: document.getElementById("nr-ai-summary").value.trim()
+    };
+
+    const errorEl = document.getElementById("new-request-error");
+
+    if (!rawRow.property) {
+      errorEl.textContent = "Property is required.";
+      errorEl.hidden = false;
+      return;
+    }
+    if (!rawRow.issue) {
+      errorEl.textContent = "Issue is required.";
+      errorEl.hidden = false;
+      return;
+    }
+    if (state.rows.some((r) => r.id === rawRow.id)) {
+      errorEl.textContent = "Could not generate a unique request ID. Please try again.";
+      errorEl.hidden = false;
+      return;
+    }
+
+    const { clean, errors } = validateRows([rawRow]);
+    if (errors.length > 0) {
+      errorEl.textContent = errors[0].replace(/^row \d+ \([^)]*\): /, "");
+      errorEl.hidden = false;
+      return;
+    }
+    errorEl.hidden = true;
+
+    state.rows.push(clean[0]);
+    populatePropertySelect(state.rows);
+    renderAll();
+    closeNewRequestDialog();
+    showStatusBanner("Added " + clean[0].id + " for " + clean[0].property + ".", "info");
   }
 
   // ---- Top-level render / wiring ----------------------------------------
@@ -702,9 +886,81 @@
     });
   }
 
+  function wireNewRequestDialog() {
+    populateSelect(document.getElementById("nr-category"), CATEGORIES);
+    populateSelect(document.getElementById("nr-priority"), PRIORITIES);
+    populateSelect(document.getElementById("nr-status"), STATUSES);
+
+    document.getElementById("new-request-btn").addEventListener("click", (e) => openNewRequestDialog(e.currentTarget));
+    document.getElementById("new-request-close").addEventListener("click", closeNewRequestDialog);
+    document.getElementById("new-request-cancel").addEventListener("click", closeNewRequestDialog);
+    document.getElementById("new-request-overlay").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeNewRequestDialog();
+    });
+    document.getElementById("new-request-form").addEventListener("submit", handleNewRequestSubmit);
+    document.getElementById("nr-status").addEventListener("change", updateNewRequestConditionalFields);
+    document.getElementById("nr-cost").addEventListener("input", updateNewRequestConditionalFields);
+    document.getElementById("nr-date-created").addEventListener("change", (e) => {
+      document.getElementById("nr-date-resolved").min = e.target.value;
+      document.getElementById("nr-cost-date").min = e.target.value;
+    });
+  }
+
+  // ---- CSV upload ------------------------------------------------------
+
+  async function handleCsvUpload(file) {
+    let text;
+    try {
+      text = await file.text();
+    } catch (err) {
+      showStatusBanner("Could not read " + file.name + ".", "error");
+      return;
+    }
+
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    const { clean, errors } = validateRows(parsed.data);
+
+    if (clean.length === 0) {
+      showStatusBanner("Could not load " + file.name + ": no valid rows found. Keeping the current data.", "error");
+      if (errors.length > 0) console.error("Uploaded CSV validation errors:\n" + errors.join("\n"));
+      return;
+    }
+
+    state.rows = clean;
+    state.property = ALL_PROPERTIES;
+    populatePropertySelect(state.rows);
+    renderAll();
+
+    if (errors.length > 0) {
+      console.error("Uploaded CSV validation errors:\n" + errors.join("\n"));
+      showStatusBanner(
+        clean.length + " request(s) loaded from " + file.name + "; " + errors.length + " row(s) were skipped (see console).",
+        "error"
+      );
+    } else {
+      showStatusBanner(
+        "Loaded " + clean.length + " request(s) from " + file.name + ". This replaces the sample data for this browser session only.",
+        "info"
+      );
+    }
+  }
+
+  function wireCsvUpload() {
+    const uploadBtn = document.getElementById("upload-csv-btn");
+    const fileInput = document.getElementById("csv-upload-input");
+    uploadBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (file) handleCsvUpload(file);
+    });
+  }
+
   async function init() {
     wireTabs();
     wireDialog();
+    wireNewRequestDialog();
+    wireCsvUpload();
 
     let csvText;
     try {

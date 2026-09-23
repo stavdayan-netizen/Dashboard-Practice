@@ -33,3 +33,12 @@ then open `http://localhost:8531`.
    then refresh the page.
 
 The demo's "as-of" date (`2026-09-23`) is a single constant, `AS_OF_DATE`, near the top of `app.js`.
+
+## Upload CSV / + New Request
+
+Two header buttons let you try the dashboard with your own data, in-browser, without editing any files:
+
+- **Upload CSV** replaces the dashboard's dataset with a CSV you pick from your computer (same 13-column format as `maintenance_requests.csv` — see the header row for the exact column order). `demo_upload_sample.csv` (linked via **Download demo CSV**) is a small 6-row file you can download and re-upload to see it in action.
+- **+ New Request** opens a form to add one request by hand (its ID is generated automatically).
+
+Both go through the same validation as the built-in loader, and both only change data in memory for the current browser tab — nothing is written back to `maintenance_requests.csv`. Reload the page to return to the original sample data.
