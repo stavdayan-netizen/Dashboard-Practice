@@ -13,20 +13,40 @@
   const OPEN_STATUSES = ["New", "Scheduled", "In Progress"];
   const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
+  // Soft, cohesive pastel palette. Each entry stays distinct at a glance
+  // while sharing the same low-saturation, high-lightness pastel family.
   const CATEGORY_COLORS = {
-    "Plumbing": "#3949ab",
-    "HVAC": "#00897b",
-    "Electrical": "#e07a3f",
-    "Appliance": "#8e5fc4",
-    "Doors & Locks": "#c0526e",
-    "General": "#5c7a99"
+    "Plumbing": "#A7C7E7",
+    "HVAC": "#A8E0C7",
+    "Electrical": "#FDE9A0",
+    "Appliance": "#D3C3EF",
+    "Doors & Locks": "#F5C3D0",
+    "General": "#F8D3A9"
   };
 
   const STATUS_COLORS = {
-    "New": "#9aa1ae",
-    "Scheduled": "#3949ab",
-    "In Progress": "#c9701f",
-    "Resolved": "#1f7a4d"
+    "New": "#C6D3EC",
+    "Scheduled": "#C2C9F5",
+    "In Progress": "#FBD2A6",
+    "Resolved": "#A9DEC0"
+  };
+
+  // Slightly deeper pastel border so pale slices/bars stay visually distinct
+  // against the white card background.
+  const CATEGORY_BORDER_COLORS = {
+    "Plumbing": "#89B2DE",
+    "HVAC": "#84C9AC",
+    "Electrical": "#F0D373",
+    "Appliance": "#B79FE0",
+    "Doors & Locks": "#E79FB3",
+    "General": "#EFB57E"
+  };
+
+  const STATUS_BORDER_COLORS = {
+    "New": "#A6B7DA",
+    "Scheduled": "#9CA6EC",
+    "In Progress": "#F4B26E",
+    "Resolved": "#7BC79B"
   };
 
   const STATUS_BADGE_CLASS = {
@@ -321,7 +341,8 @@
         datasets: [{
           data: categoryEntries.map((e) => e.count),
           backgroundColor: categoryEntries.map((e) => CATEGORY_COLORS[e.key]),
-          borderWidth: 0
+          borderColor: categoryEntries.map((e) => CATEGORY_BORDER_COLORS[e.key]),
+          borderWidth: 2
         }]
       },
       options: {
@@ -345,6 +366,8 @@
         datasets: [{
           data: statusEntries.map((e) => e.count),
           backgroundColor: statusEntries.map((e) => STATUS_COLORS[e.key]),
+          borderColor: statusEntries.map((e) => STATUS_BORDER_COLORS[e.key]),
+          borderWidth: 1.5,
           borderRadius: 4,
           maxBarThickness: 56
         }]
