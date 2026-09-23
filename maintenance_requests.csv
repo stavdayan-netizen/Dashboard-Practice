@@ -1,0 +1,41 @@
+id,date_created,property,tenant,issue,category,priority,status,assigned_to,date_resolved,cost,cost_date,ai_summary
+MR-1001,2026-09-20,123 Cedar St,Jordan Lee,Kitchen sink is leaking,Plumbing,High,In Progress,Sample Plumbing Co,,85,2026-09-21,Active sink leak; follow up with plumber and tenant.
+MR-1002,2026-08-15,123 Cedar St,Casey Morgan,AC not cooling on hot days,HVAC,Urgent,New,,,,,No cooling reported; dispatch HVAC tech same day.
+MR-1003,2026-06-02,123 Cedar St,Alex Rivera,Front door lock is sticking,Doors & Locks,Medium,Resolved,Ace Locksmiths,2026-06-05,60,2026-06-05,Lock lubricated and adjusted; issue resolved.
+MR-1004,2026-09-10,123 Cedar St,Taylor Brooks,Dishwasher not draining,Appliance,Medium,Scheduled,Metro Appliance Repair,,45,2026-09-12,Drain likely clogged; technician scheduled to inspect.
+MR-1005,2026-09-18,123 Cedar St,Morgan Lee,Outlet in bedroom sparked,Electrical,Urgent,Scheduled,Bright Spark Electric,,,,Potential wiring hazard; electrician dispatched urgently.
+MR-1006,2026-03-22,123 Cedar St,Sam Patel,Hallway light fixture flickering,General,Low,Resolved,Cedar Maintenance Team,2026-03-25,25,2026-03-24,Bulb and fixture replaced; flickering stopped.
+MR-1007,2026-09-05,456 Maple Ave,Riley Chen,No hot water in unit,Plumbing,Urgent,In Progress,Sample Plumbing Co,,120,2026-09-06,Water heater suspected; plumber on site today.
+MR-1008,2026-07-14,456 Maple Ave,Jamie Fox,Refrigerator making loud noise,Appliance,Low,Resolved,Metro Appliance Repair,2026-07-16,0,2026-07-16,Noise traced to leveling; fixed at no charge under warranty.
+MR-1009,2026-09-15,456 Maple Ave,Drew Kim,Bathroom exhaust fan not working,Electrical,Medium,New,,,,,Fan motor likely failed; awaiting assignment.
+MR-1010,2026-02-10,456 Maple Ave,Casey Nguyen,Closet door off track,Doors & Locks,Low,Resolved,Cedar Maintenance Team,2026-02-12,15,2026-02-12,Door realigned on track; resolved same visit.
+MR-1011,2026-09-21,456 Maple Ave,Pat Alvarez,Thermostat unresponsive,HVAC,High,Scheduled,Comfort Air Services,,,,Thermostat may need replacement; tech scheduled.
+MR-1012,2026-09-19,789 Oak Dr,Jesse Reed,Garbage disposal jammed,Appliance,Medium,In Progress,Metro Appliance Repair,,40,2026-09-20,Disposal jam cleared; verifying full function.
+MR-1013,2026-09-01,789 Oak Dr,Robin Ortiz,Ceiling fan wobbling loudly,Electrical,Low,Resolved,Bright Spark Electric,2026-09-03,30,2026-09-03,Fan balanced and secured; issue resolved.
+MR-1014,2026-04-18,789 Oak Dr,Sam Diaz,General odor in hallway,General,Low,Resolved,Cedar Maintenance Team,2026-04-19,0,2026-04-19,Source found to be trash chute; cleaned at no charge.
+MR-1015,2026-09-22,789 Oak Dr,Avery Stone,Front entry deadbolt jammed,Doors & Locks,Urgent,New,,,,,Tenant locked out; urgent locksmith dispatch needed.
+MR-1016,2026-09-08,101 Birch Ln,Charlie Wood,Kitchen faucet dripping constantly,Plumbing,Medium,Scheduled,Sample Plumbing Co,,,,Dripping faucet reported; plumber scheduled this week.
+MR-1017,2026-01-20,101 Birch Ln,Morgan Blake,Heater not turning on,HVAC,High,Resolved,Comfort Air Services,2026-01-23,210,2026-01-22,Igniter replaced; heat restored.
+MR-1018,2026-09-12,101 Birch Ln,Jordan Hayes,Bedroom outlet not working,Electrical,Medium,New,,,,,Outlet dead; awaiting electrician assignment.
+MR-1019,2026-08-30,101 Birch Ln,Taylor Simmons,Washer leaking water onto floor,Appliance,High,In Progress,Metro Appliance Repair,,95,2026-09-02,Hose replacement in progress; monitoring for leaks.
+MR-1020,2026-05-11,101 Birch Ln,Riley Cooper,Patio door won't lock,Doors & Locks,Medium,Resolved,Ace Locksmiths,2026-05-13,55,2026-05-13,Latch mechanism repaired; door locks securely.
+MR-1021,2026-09-23,101 Birch Ln,Drew Ellis,Mailbox lock broken,General,Low,New,Cedar Maintenance Team,,,,Lock reported broken; maintenance to inspect.
+MR-1022,2026-09-14,202 Pine St,Casey Flores,Living room smoke detector beeping,General,Medium,Scheduled,Cedar Maintenance Team,,,,Likely low battery; technician scheduled to replace.
+MR-1023,2026-07-25,202 Pine St,Jamie Torres,Bathroom sink slow to drain,Plumbing,Low,Resolved,Sample Plumbing Co,2026-07-27,,,Drain cleared during visit; no cost recorded for warranty work.
+MR-1024,2026-09-16,202 Pine St,Morgan Reyes,Window won't stay open,Doors & Locks,Low,New,,,,,Window sash cord may be broken; awaiting inspection.
+MR-1025,2026-09-07,303 Elm Ct,Sam Brooks,AC leaking water inside unit,HVAC,Urgent,In Progress,Comfort Air Services,,150,2026-09-09,Condensate line clogged; repair underway.
+MR-1026,2026-06-19,303 Elm Ct,Avery Nolan,Oven not heating evenly,Appliance,Medium,Resolved,Metro Appliance Repair,2026-06-21,80,2026-06-21,Heating element replaced; oven tested and working.
+MR-1027,2026-09-11,303 Elm Ct,Riley Morgan,Circuit breaker trips repeatedly,Electrical,High,Scheduled,Bright Spark Electric,,,,Possible overloaded circuit; electrician scheduled to diagnose.
+MR-1028,2026-02-28,303 Elm Ct,Charlie Ford,Bedroom door won't latch,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-03-01,20,2026-03-01,Strike plate adjusted; door latches properly.
+MR-1029,2026-09-03,303 Elm Ct,Jordan Reyes,Musty smell in basement storage,General,Medium,In Progress,Cedar Maintenance Team,,,,Investigating possible moisture source; dehumidifier placed.
+MR-1030,2026-09-13,404 Willow Way,Taylor Reed,Kitchen pipe burst under sink,Plumbing,Urgent,In Progress,Sample Plumbing Co,,300,2026-09-14,Emergency shutoff done; pipe repair in progress.
+MR-1031,2026-09-06,404 Willow Way,Drew Sanders,Central air not cooling upstairs,HVAC,High,Resolved,Comfort Air Services,2026-09-09,175,2026-09-08,Refrigerant recharged; airflow restored upstairs.
+MR-1032,2026-01-05,404 Willow Way,Pat Coleman,Living room outlet sparking,Electrical,Urgent,Resolved,Bright Spark Electric,2026-01-06,130,2026-01-06,Faulty outlet replaced same day for safety.
+MR-1033,2026-08-22,404 Willow Way,Jesse Lane,Microwave not turning on,Appliance,Low,Resolved,Metro Appliance Repair,2026-08-24,0,2026-08-24,Reset breaker; unit functional at no charge.
+MR-1034,2026-09-17,404 Willow Way,Robin Blake,Garage side door lock broken,Doors & Locks,Medium,New,,,,,Lock cylinder appears damaged; awaiting locksmith assignment.
+MR-1035,2026-05-30,404 Willow Way,Avery James,Carpet stain in hallway,General,Low,Resolved,Cedar Maintenance Team,2026-06-01,45,2026-06-01,Professional cleaning completed; stain removed.
+MR-1036,2026-09-09,505 Spruce Rd,Casey Rivers,Water heater pilot light out,Plumbing,High,Scheduled,Sample Plumbing Co,,,,Pilot relight needed; plumber scheduled this week.
+MR-1037,2026-09-20,505 Spruce Rd,Morgan Ellis,Bathroom fan rattling loudly,HVAC,Medium,New,,,,,Fan bearing likely worn; awaiting assignment.
+MR-1038,2026-07-08,505 Spruce Rd,Jamie Hart,Entry light fixture sparking briefly,Electrical,High,Resolved,Bright Spark Electric,2026-07-10,65,2026-07-10,Wiring fault fixed; fixture tested safe.
+MR-1039,2026-09-02,505 Spruce Rd,Riley Foster,Dryer not heating,Appliance,Medium,Resolved,Metro Appliance Repair,2026-09-04,110,2026-09-04,Heating coil replaced; dryer tested working.
+MR-1040,2026-03-14,505 Spruce Rd,Drew Patel,Front door weatherstripping torn,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-03-16,18,2026-03-16,Weatherstripping replaced; draft eliminated.

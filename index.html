@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tenant Maintenance Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-text">
+    <h1>Tenant Maintenance Dashboard</h1>
+    <p class="subtitle">A demo view of maintenance requests across your rental portfolio, built from sample CSV data.</p>
+  </div>
+  <div class="property-select-wrap">
+    <label for="property-select">Property</label>
+    <select id="property-select" aria-label="Filter by property"></select>
+  </div>
+</header>
+
+<main id="main-content">
+
+  <section class="kpi-grid" aria-label="Key metrics">
+    <div class="kpi-card">
+      <span class="kpi-label">Open Requests</span>
+      <span class="kpi-value" id="kpi-open">-</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">Urgent Open Requests</span>
+      <span class="kpi-value" id="kpi-urgent">-</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">Resolved This Month</span>
+      <span class="kpi-value" id="kpi-resolved-month">-</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">Avg. Resolution Time</span>
+      <span class="kpi-value" id="kpi-avg-resolution">-</span>
+    </div>
+  </section>
+
+  <section class="charts-grid" aria-label="Request breakdowns">
+    <div class="chart-card">
+      <h2>Requests by Category</h2>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-category" role="img" aria-label="Donut chart of requests by category"></canvas>
+      </div>
+      <ul class="chart-legend" id="legend-category"></ul>
+    </div>
+    <div class="chart-card">
+      <h2>Requests by Status</h2>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-status" role="img" aria-label="Bar chart of requests by status"></canvas>
+      </div>
+      <ul class="chart-legend" id="legend-status"></ul>
+    </div>
+  </section>
+
+  <section class="requests-section" aria-label="Maintenance requests">
+    <div class="section-heading-row">
+      <h2>Maintenance Requests</h2>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Request status">
+      <button class="tab-btn is-active" id="tab-open" role="tab" aria-selected="true" aria-controls="requests-panel">Open Requests <span id="tab-open-count">(0)</span></button>
+      <button class="tab-btn" id="tab-resolved" role="tab" aria-selected="false" aria-controls="requests-panel">Resolved <span id="tab-resolved-count">(0)</span></button>
+    </div>
+
+    <div id="requests-panel" role="tabpanel">
+      <div class="table-wrap">
+        <table class="requests-table" id="requests-table">
+          <thead>
+            <tr id="requests-table-head"></tr>
+          </thead>
+          <tbody id="requests-table-body"></tbody>
+        </table>
+      </div>
+      <div class="requests-cards" id="requests-cards"></div>
+      <p class="empty-state" id="requests-empty" hidden></p>
+    </div>
+  </section>
+
+  <section class="costs-section" aria-label="Maintenance costs year to date by property">
+    <h2>Maintenance Costs Year to Date by Property</h2>
+    <div id="costs-table-wrap"></div>
+  </section>
+
+</main>
+
+<div class="dialog-overlay" id="dialog-overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" id="request-dialog">
+    <button class="dialog-close" id="dialog-close" aria-label="Close">&times;</button>
+    <h2 id="dialog-title"></h2>
+    <dl class="dialog-body" id="dialog-body"></dl>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
