@@ -33,22 +33,23 @@
     "General": "#EFB57E"
   };
 
-  // Deliberately different "dusty/earthy pastel" family for the status bar
-  // chart, so it reads as visually distinct from the category donut above
-  // it. The four hues (sand, plum, terracotta, olive) are spread widely
-  // around the color wheel so no two statuses read as the same color.
+  // Light, soft pastels for the status bar chart -- peach / lavender /
+  // coral-pink / mint, the same light-and-airy family as the donut above,
+  // but each shade is paled, lightened, or hue-shifted away from the
+  // donut's closest lookalike (General's peach, Appliance's lavender,
+  // Doors & Locks' pink, HVAC's mint) so the two charts don't repeat colors.
   const STATUS_COLORS = {
-    "New": "#DAC6AE",
-    "Scheduled": "#C79FD1",
-    "In Progress": "#E8987D",
-    "Resolved": "#AABE73"
+    "New": "#FFDCC2",
+    "Scheduled": "#E3CEF2",
+    "In Progress": "#FFC2BA",
+    "Resolved": "#C0EDD4"
   };
 
   const STATUS_BORDER_COLORS = {
-    "New": "#BA9A72",
-    "Scheduled": "#A472B3",
-    "In Progress": "#D06F4F",
-    "Resolved": "#8AA24C"
+    "New": "#F0B98C",
+    "Scheduled": "#C9A3E0",
+    "In Progress": "#F09184",
+    "Resolved": "#8FCFA8"
   };
 
   const STATUS_BADGE_CLASS = {
