@@ -33,22 +33,21 @@
     "General": "#EFB57E"
   };
 
-  // Light, soft pastels for the status bar chart -- peach / lavender /
-  // coral-pink / mint, the same light-and-airy family as the donut above,
-  // but each shade is paled, lightened, or hue-shifted away from the
-  // donut's closest lookalike (General's peach, Appliance's lavender,
-  // Doors & Locks' pink, HVAC's mint) so the two charts don't repeat colors.
+  // Light, soft pastels for the status bar chart -- gray / blue / orange /
+  // mint -- kept a shade paler or hue-shifted from the donut's closest
+  // lookalike (Plumbing's blue, General's peach, HVAC's mint) so the two
+  // charts don't repeat colors.
   const STATUS_COLORS = {
-    "New": "#FFDCC2",
-    "Scheduled": "#E3CEF2",
-    "In Progress": "#FFC2BA",
+    "New": "#E1E4EA",
+    "Scheduled": "#C7E4F7",
+    "In Progress": "#FFC98F",
     "Resolved": "#C0EDD4"
   };
 
   const STATUS_BORDER_COLORS = {
-    "New": "#F0B98C",
-    "Scheduled": "#C9A3E0",
-    "In Progress": "#F09184",
+    "New": "#AEB6C4",
+    "Scheduled": "#8EC2E8",
+    "In Progress": "#F0A652",
     "Resolved": "#8FCFA8"
   };
 
