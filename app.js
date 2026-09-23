@@ -7,6 +7,19 @@
   const YTD_START_DATE = "2026-01-01";
   const ALL_PROPERTIES = "All Properties";
 
+  // Embedded verbatim (kept in sync with demo_upload_sample.csv) so the
+  // "Download demo CSV" button works via a generated Blob instead of a
+  // direct file link -- browsers block the <a download> attribute for
+  // file:// pages, which is how this file most often gets opened.
+  const DEMO_CSV = `id,date_created,property,tenant,issue,category,priority,status,assigned_to,date_resolved,cost,cost_date,ai_summary
+DEMO-1,2026-09-15,10 Harbor View,Jamie Ross,Bathroom light won't turn on,Electrical,Medium,New,,,,,Switch or bulb likely failed; awaiting assignment.
+DEMO-2,2026-09-10,22 Lakeside Dr,Morgan Price,Kitchen faucet handle loose,Plumbing,Low,Scheduled,Sample Plumbing Co,,,,Handle needs tightening; plumber scheduled this week.
+DEMO-3,2026-08-28,5 Forest Hill Rd,Casey Bloom,Furnace making rattling noise,HVAC,High,In Progress,Comfort Air Services,,140,2026-09-01,Rattling traced to loose panel; repair underway.
+DEMO-4,2026-06-14,10 Harbor View,Drew Falk,Dryer not spinning,Appliance,Medium,Resolved,Metro Appliance Repair,2026-06-16,95,2026-06-16,Belt replaced; dryer tested and working.
+DEMO-5,2026-09-20,22 Lakeside Dr,Riley Grant,Front gate lock jammed,Doors & Locks,Urgent,New,,,,,Tenant unable to lock gate; urgent locksmith needed.
+DEMO-6,2026-04-02,5 Forest Hill Rd,Avery Shaw,Musty smell after rain,General,Low,Resolved,Cedar Maintenance Team,2026-04-05,0,2026-04-05,Minor damp spot aired out; no charge.
+`;
+
   const CATEGORIES = ["Plumbing", "HVAC", "Electrical", "Appliance", "Doors & Locks", "General"];
   const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
   const STATUSES = ["New", "Scheduled", "In Progress", "Resolved"];
@@ -956,11 +969,30 @@
     });
   }
 
+  function downloadTextFile(filename, text, mimeType) {
+    const blob = new Blob([text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function wireDemoCsvDownload() {
+    document.getElementById("demo-csv-link").addEventListener("click", () => {
+      downloadTextFile("demo_upload_sample.csv", DEMO_CSV, "text/csv");
+    });
+  }
+
   async function init() {
     wireTabs();
     wireDialog();
     wireNewRequestDialog();
     wireCsvUpload();
+    wireDemoCsvDownload();
 
     let csvText;
     try {
