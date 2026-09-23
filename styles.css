@@ -11,12 +11,19 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
-  --color-urgent: #c0362c;
-  --color-urgent-bg: #fbe7e5;
-  --color-high: #b6560f;
-  --color-high-bg: #fdecdc;
-  --color-medium: #92670a;
-  --color-medium-bg: #fbf0d6;
+  /* Priority badges: red/pink (Urgent), orange (High), and yellow (Medium)
+     are deliberately spread across distinct hues -- not just darkened
+     shades of one warm tone -- with a matching border so the three stay
+     easy to tell apart at a glance while the fill stays pastel. */
+  --color-urgent: #a3242b;
+  --color-urgent-bg: #fbd9d9;
+  --color-urgent-border: #ecacae;
+  --color-high: #914d00;
+  --color-high-bg: #fce2c0;
+  --color-high-border: #eeba71;
+  --color-medium: #7a6100;
+  --color-medium-bg: #faf0a0;
+  --color-medium-border: #e3cc55;
   --color-low: #1f7a4d;
   --color-low-bg: #e2f5ea;
 }
@@ -334,9 +341,9 @@ section h2 {
   white-space: nowrap;
 }
 
-.badge-urgent { color: var(--color-urgent); background: var(--color-urgent-bg); }
-.badge-high { color: var(--color-high); background: var(--color-high-bg); }
-.badge-medium { color: var(--color-medium); background: var(--color-medium-bg); }
+.badge-urgent { color: var(--color-urgent); background: var(--color-urgent-bg); border: 1px solid var(--color-urgent-border); }
+.badge-high { color: var(--color-high); background: var(--color-high-bg); border: 1px solid var(--color-high-border); }
+.badge-medium { color: var(--color-medium); background: var(--color-medium-bg); border: 1px solid var(--color-medium-border); }
 .badge-low { color: var(--color-low); background: var(--color-low-bg); }
 
 .badge-resolved { color: var(--color-low); background: var(--color-low-bg); }
