@@ -18,6 +18,36 @@ DEMO-3,2026-08-28,5 Forest Hill Rd,Casey Bloom,Furnace making rattling noise,HVA
 DEMO-4,2026-06-14,10 Harbor View,Drew Falk,Dryer not spinning,Appliance,Medium,Resolved,Metro Appliance Repair,2026-06-16,95,2026-06-16,Belt replaced; dryer tested and working.
 DEMO-5,2026-09-20,22 Lakeside Dr,Riley Grant,Front gate lock jammed,Doors & Locks,Urgent,New,,,,,Tenant unable to lock gate; urgent locksmith needed.
 DEMO-6,2026-04-02,5 Forest Hill Rd,Avery Shaw,Musty smell after rain,General,Low,Resolved,Cedar Maintenance Team,2026-04-05,0,2026-04-05,Minor damp spot aired out; no charge.
+DEMO-7,2026-09-05,10 Harbor View,Logan Pierce,Kitchen sink drain clogged,Plumbing,High,Scheduled,Sample Plumbing Co,,,,Drain likely blocked; plumber scheduled this week.
+DEMO-8,2026-09-18,10 Harbor View,Harper Voss,No AC airflow from vents,HVAC,Urgent,New,,,,,No airflow reported; dispatch HVAC tech same day.
+DEMO-9,2026-03-10,10 Harbor View,Elliot Cruz,Closet door hinge squeaking,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-03-12,20,2026-03-12,Hinge lubricated; squeak resolved.
+DEMO-10,2026-09-02,10 Harbor View,Quinn Bailey,Hallway carpet fraying at edge,General,Medium,In Progress,Cedar Maintenance Team,,30,2026-09-03,Edge trim ordered; repair in progress.
+DEMO-11,2026-09-19,10 Harbor View,Sage Whitfield,Breaker panel buzzing loudly,Electrical,Urgent,In Progress,Bright Spark Electric,,,,Possible loose connection; electrician on site.
+DEMO-12,2026-07-01,10 Harbor View,Rowan Ellis,Freezer not sealing properly,Appliance,Low,Resolved,Metro Appliance Repair,2026-07-03,0,2026-07-03,Gasket realigned; no charge under warranty.
+DEMO-13,2026-09-08,10 Harbor View,Blake Sutton,Toilet running continuously,Plumbing,Medium,Resolved,Sample Plumbing Co,2026-09-10,60,2026-09-10,Flapper valve replaced; issue resolved.
+DEMO-14,2026-08-25,10 Harbor View,Marlowe Dean,Thermostat display blank,HVAC,High,Scheduled,Comfort Air Services,,,,Thermostat likely needs replacement; tech scheduled.
+DEMO-15,2026-09-21,10 Harbor View,Tatum Reyes,Balcony door won't slide,Doors & Locks,Medium,New,,,,,Track may be obstructed; awaiting assignment.
+DEMO-16,2026-01-15,10 Harbor View,Finley Ward,Mailroom light burned out,General,Low,Resolved,Cedar Maintenance Team,2026-01-17,15,2026-01-17,Bulb replaced; resolved same visit.
+DEMO-17,2026-09-14,22 Lakeside Dr,Emerson Blake,AC unit leaking onto carpet,HVAC,High,In Progress,Comfort Air Services,,110,2026-09-16,Condensate pan cracked; replacement underway.
+DEMO-18,2026-09-11,22 Lakeside Dr,Percy Nash,Living room outlet not working,Electrical,Medium,New,,,,,Outlet dead; awaiting electrician assignment.
+DEMO-19,2026-09-06,22 Lakeside Dr,Wren Castillo,Dishwasher leaving residue on dishes,Appliance,Low,Scheduled,Metro Appliance Repair,,,,Likely spray arm clog; technician scheduled.
+DEMO-20,2026-09-17,22 Lakeside Dr,Ellis Monroe,Strong gas odor near stove,General,Urgent,In Progress,Cedar Maintenance Team,,,,Utility company notified; maintenance investigating urgently.
+DEMO-21,2026-05-02,22 Lakeside Dr,Sawyer Gable,Water heater leaking at base,Plumbing,High,Resolved,Sample Plumbing Co,2026-05-05,175,2026-05-05,Water heater valve replaced; leak stopped.
+DEMO-22,2026-08-10,22 Lakeside Dr,Marin Hale,Screen door latch broken,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-08-12,25,2026-08-12,Latch replaced; door secures properly.
+DEMO-23,2026-09-22,22 Lakeside Dr,Devon Lark,Vent making rattling sound,HVAC,Medium,New,,,,,Rattling reported; awaiting inspection.
+DEMO-24,2026-09-05,22 Lakeside Dr,Isla Brennan,Washer not spinning fully,Appliance,Medium,Resolved,Metro Appliance Repair,2026-09-07,0,2026-09-07,Reset cycle fixed issue; no charge.
+DEMO-25,2026-08-30,22 Lakeside Dr,Cove Ashby,Flickering lights throughout unit,Electrical,High,Scheduled,Bright Spark Electric,,,,Possible wiring issue; electrician scheduled to diagnose.
+DEMO-26,2026-02-18,22 Lakeside Dr,Briar Solis,Stairwell handrail loose,General,Low,Resolved,Cedar Maintenance Team,2026-02-20,10,2026-02-20,Handrail bracket tightened; resolved.
+DEMO-27,2026-09-19,5 Forest Hill Rd,Jules Farrow,Pipe burst under bathroom sink,Plumbing,Urgent,New,,,,,Active leak reported; urgent plumber dispatch needed.
+DEMO-28,2026-09-04,5 Forest Hill Rd,Ronan Pike,Ceiling fan switch not responding,Electrical,Medium,Scheduled,,,,,Switch likely faulty; electrician scheduled.
+DEMO-29,2026-09-12,5 Forest Hill Rd,Wynn Halloway,Oven not reaching set temperature,Appliance,High,In Progress,Metro Appliance Repair,,85,2026-09-13,Heating element testing underway.
+DEMO-30,2026-06-20,5 Forest Hill Rd,Story Eaton,Garage door remote not syncing,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-06-22,18,2026-06-22,Remote reprogrammed; syncing correctly.
+DEMO-31,2026-09-16,5 Forest Hill Rd,Arden Foss,Musty smell in basement,General,Medium,New,,,,,Possible moisture source; awaiting inspection.
+DEMO-32,2026-09-01,5 Forest Hill Rd,Kai Renshaw,Furnace not producing heat,HVAC,Urgent,Resolved,Comfort Air Services,2026-09-02,200,2026-09-02,Ignitor replaced; heat restored same day.
+DEMO-33,2026-03-05,5 Forest Hill Rd,Noor Kimball,Slow draining bathtub,Plumbing,Low,Resolved,Sample Plumbing Co,2026-03-07,40,2026-03-07,Drain cleared; flow restored.
+DEMO-34,2026-09-10,5 Forest Hill Rd,Remy Ashworth,Half of unit lost power,Electrical,High,In Progress,Bright Spark Electric,,,,Tripped breaker suspected; electrician investigating.
+DEMO-35,2026-08-20,5 Forest Hill Rd,Sloane Whitaker,Microwave turntable not rotating,Appliance,Medium,Scheduled,Metro Appliance Repair,,,,Motor likely worn; technician scheduled.
+DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engage,Doors & Locks,Urgent,New,,,,,Tenant unable to secure unit; urgent locksmith needed.
 `;
 
   const CATEGORIES = ["Plumbing", "HVAC", "Electrical", "Appliance", "Doors & Locks", "General"];
