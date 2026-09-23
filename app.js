@@ -13,8 +13,8 @@
   const OPEN_STATUSES = ["New", "Scheduled", "In Progress"];
   const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
-  // Soft, cohesive pastel palette. Each entry stays distinct at a glance
-  // while sharing the same low-saturation, high-lightness pastel family.
+  // Soft, cohesive "candy pastel" palette for the category donut: bright,
+  // high-lightness, low-saturation. Each entry stays distinct at a glance.
   const CATEGORY_COLORS = {
     "Plumbing": "#A7C7E7",
     "HVAC": "#A8E0C7",
@@ -24,15 +24,6 @@
     "General": "#F8D3A9"
   };
 
-  const STATUS_COLORS = {
-    "New": "#C6D3EC",
-    "Scheduled": "#C2C9F5",
-    "In Progress": "#FBD2A6",
-    "Resolved": "#A9DEC0"
-  };
-
-  // Slightly deeper pastel border so pale slices/bars stay visually distinct
-  // against the white card background.
   const CATEGORY_BORDER_COLORS = {
     "Plumbing": "#89B2DE",
     "HVAC": "#84C9AC",
@@ -42,11 +33,22 @@
     "General": "#EFB57E"
   };
 
+  // Deliberately different "dusty/earthy pastel" family for the status bar
+  // chart, so it reads as visually distinct from the category donut above
+  // it. The four hues (sand, plum, terracotta, olive) are spread widely
+  // around the color wheel so no two statuses read as the same color.
+  const STATUS_COLORS = {
+    "New": "#DAC6AE",
+    "Scheduled": "#C79FD1",
+    "In Progress": "#E8987D",
+    "Resolved": "#AABE73"
+  };
+
   const STATUS_BORDER_COLORS = {
-    "New": "#A6B7DA",
-    "Scheduled": "#9CA6EC",
-    "In Progress": "#F4B26E",
-    "Resolved": "#7BC79B"
+    "New": "#BA9A72",
+    "Scheduled": "#A472B3",
+    "In Progress": "#D06F4F",
+    "Resolved": "#8AA24C"
   };
 
   const STATUS_BADGE_CLASS = {
