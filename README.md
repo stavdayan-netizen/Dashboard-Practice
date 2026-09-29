@@ -38,7 +38,25 @@ The demo's "as-of" date (`2026-09-23`) is a single constant, `AS_OF_DATE`, near 
 
 Two header buttons let you try the dashboard with your own data, in-browser, without editing any files:
 
-- **Upload CSV** replaces the dashboard's dataset with a CSV you pick from your computer (same 13-column format as `maintenance_requests.csv` — see the header row for the exact column order). `demo_upload_sample.csv` (linked via **Download demo CSV**) is a small 6-row file you can download and re-upload to see it in action.
+- **Upload CSV** replaces the dashboard's dataset with a CSV you pick from your computer (same 13-column format as `maintenance_requests.csv` — see the header row for the exact column order). `demo_upload_sample.csv` (linked via **Download demo CSV**) is a 36-row file you can download and re-upload to see it in action.
 - **+ New Request** opens a form to add one request by hand (its ID is generated automatically).
 
-Both go through the same validation as the built-in loader, and both only change data in memory for the current browser tab — nothing is written back to `maintenance_requests.csv`. Reload the page to return to the original sample data.
+Both go through the same validation as the built-in loader, and both only change data in memory for the current browser tab — nothing is written back to `maintenance_requests.csv`. Reload the page to return to the live/default data source.
+
+## Airtable connection
+
+The dashboard's primary data source is a live Airtable base ("Property Maintenance Tickets" → "Maintenance Tickets" table), so anyone who opens the deployed page sees data coming from a real database, not a static file. This is wired up in `app.js`:
+
+```js
+const AIRTABLE_CONFIG = {
+  baseId: "appIl5LOY1FMfCPUR",
+  tableId: "tblk60sOTkEpyDmr1",
+  token: "..." // a real Airtable Personal Access Token
+};
+```
+
+**Why it's safe for this token to be public source code:** it's a Personal Access Token scoped to exactly one permission (`data.records:read`) on exactly one base. It cannot write, delete, or reach any other base or workspace — the worst case if someone else finds it is that they can also read this one table of fictional maintenance requests. Never put a token with write access or multi-base access here.
+
+**What happens without a valid token:** `init()` in `app.js` tries Airtable first; if the request fails for any reason (bad/missing token, network issue, rate limit), it silently falls back to the bundled `maintenance_requests.csv` (or the embedded `data.js` copy). A small badge next to the page title ("Live: Airtable" / "Sample data (CSV)") always shows which one is actually active.
+
+**Regenerating the token:** if you ever need a fresh one, create it at [airtable.com/create/tokens](https://airtable.com/create/tokens) scoped the same way (one base, `data.records:read` only), then replace the `token` value in `AIRTABLE_CONFIG`.
