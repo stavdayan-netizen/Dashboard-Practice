@@ -7,6 +7,21 @@
   const YTD_START_DATE = "2026-01-01";
   const ALL_PROPERTIES = "All Properties";
 
+  // Live data source: Airtable ("Property Maintenance Tickets" base,
+  // "Maintenance Tickets" table -- field names match the CSV schema below).
+  //
+  // The token here is meant to be public. Create it at
+  // https://airtable.com/create/tokens scoped to ONLY this one base with
+  // ONLY the "data.records:read" permission -- read-only, single-base
+  // tokens are safe to ship in client-side code because the worst case is
+  // someone else can also read this one table of sample data. Never use a
+  // token with write access or access to other bases/workspaces here.
+  const AIRTABLE_CONFIG = {
+    baseId: "appIl5LOY1FMfCPUR",
+    tableId: "tblk60sOTkEpyDmr1", // "Maintenance Tickets"
+    token: "path6ceZDd1hmWcMV.76d0659562192e1310d4e8cab35369af880c9345fa6b4db664f7a8ca1fc3fedb"
+  };
+
   // Embedded verbatim (kept in sync with demo_upload_sample.csv) so the
   // "Download demo CSV" button works via a generated Blob instead of a
   // direct file link -- browsers block the <a download> attribute for
@@ -114,7 +129,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     rows: [],
     property: ALL_PROPERTIES,
     tab: "open",
-    lastFocusedEl: null
+    lastFocusedEl: null,
+    dataSource: null // "airtable" | "csv", set once loading finishes
   };
 
   let categoryChart = null;
@@ -163,6 +179,56 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       if (typeof MAINTENANCE_CSV === "string") return MAINTENANCE_CSV;
       throw err;
     }
+  }
+
+  const AIRTABLE_TOKEN_PLACEHOLDER = "PASTE_YOUR_READ_ONLY_AIRTABLE_TOKEN_HERE";
+
+  function airtableFieldsToRawRow(fields) {
+    // Airtable's REST API returns single/multi-line text and single-select
+    // fields as plain strings, date fields as "YYYY-MM-DD", currency fields
+    // as numbers, and omits any field that is empty -- normalize all of
+    // that into the same all-string shape validateRows() expects from CSV
+    // rows (missing/blank -> "").
+    const str = (v) => (v === undefined || v === null ? "" : String(v));
+    return {
+      id: str(fields.id),
+      date_created: str(fields.date_created),
+      property: str(fields.property),
+      tenant: str(fields.tenant),
+      issue: str(fields.issue),
+      category: str(fields.category),
+      priority: str(fields.priority),
+      status: str(fields.status),
+      assigned_to: str(fields.assigned_to),
+      date_resolved: str(fields.date_resolved),
+      cost: str(fields.cost),
+      cost_date: str(fields.cost_date),
+      ai_summary: str(fields.ai_summary)
+    };
+  }
+
+  async function loadRowsFromAirtable() {
+    if (!AIRTABLE_CONFIG.token || AIRTABLE_CONFIG.token === AIRTABLE_TOKEN_PLACEHOLDER) {
+      return null; // not configured -- caller falls back to the bundled CSV
+    }
+
+    const rawRows = [];
+    let offset = "";
+    do {
+      const url = new URL("https://api.airtable.com/v0/" + AIRTABLE_CONFIG.baseId + "/" + AIRTABLE_CONFIG.tableId);
+      url.searchParams.set("pageSize", "100");
+      if (offset) url.searchParams.set("offset", offset);
+
+      const res = await fetch(url, {
+        headers: { Authorization: "Bearer " + AIRTABLE_CONFIG.token }
+      });
+      if (!res.ok) throw new Error("Airtable request failed: HTTP " + res.status);
+      const data = await res.json();
+      (data.records || []).forEach((record) => rawRows.push(airtableFieldsToRawRow(record.fields || {})));
+      offset = data.offset || "";
+    } while (offset);
+
+    return rawRows;
   }
 
   function validateRows(rawRows) {
@@ -256,10 +322,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     }
   }
 
-  function showValidationBanner(errors) {
-    console.error("Maintenance CSV validation errors:\n" + errors.join("\n"));
+  function showValidationBanner(errors, sourceLabel) {
+    console.error("Maintenance data validation errors (" + sourceLabel + "):\n" + errors.join("\n"));
     showStatusBanner(
-      errors.length + " row(s) in maintenance_requests.csv failed validation and were excluded. See the browser console for details.",
+      errors.length + " row(s) from " + sourceLabel + " failed validation and were excluded. See the browser console for details.",
       "error"
     );
   }
@@ -971,6 +1037,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
     state.rows = clean;
     state.property = ALL_PROPERTIES;
+    state.dataSource = "csv";
+    updateDataSourceBadge();
     populatePropertySelect(state.rows);
     renderAll();
 
@@ -1017,6 +1085,21 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     });
   }
 
+  function updateDataSourceBadge() {
+    const badge = document.getElementById("data-source-badge");
+    if (state.dataSource === "airtable") {
+      badge.textContent = "Live: Airtable";
+      badge.className = "data-source-badge data-source-badge--airtable";
+      badge.hidden = false;
+    } else if (state.dataSource === "csv") {
+      badge.textContent = "Sample data (CSV)";
+      badge.className = "data-source-badge data-source-badge--csv";
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
   async function init() {
     wireTabs();
     wireDialog();
@@ -1024,25 +1107,54 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     wireCsvUpload();
     wireDemoCsvDownload();
 
-    let csvText;
-    try {
-      csvText = await loadCsvText();
-    } catch (err) {
-      showFatalError("Could not load maintenance_requests.csv. Serve this folder through a local web server, or run generate-data.ps1 and reload.");
-      return;
+    let clean = null;
+    let errors = [];
+
+    // Prefer live Airtable data when a token is configured (see
+    // AIRTABLE_CONFIG near the top of this file); fall back to the bundled
+    // CSV otherwise, or if the Airtable request fails for any reason.
+    if (typeof loadRowsFromAirtable === "function") {
+      try {
+        const airtableRows = await loadRowsFromAirtable();
+        if (airtableRows) {
+          const result = validateRows(airtableRows);
+          if (result.clean.length > 0) {
+            clean = result.clean;
+            errors = result.errors;
+            state.dataSource = "airtable";
+            if (errors.length > 0) showValidationBanner(errors, "Airtable");
+          } else if (result.errors.length > 0) {
+            console.error("All rows returned by Airtable failed validation:\n" + result.errors.join("\n"));
+          }
+        }
+      } catch (err) {
+        console.error("Could not load data from Airtable, falling back to the sample CSV:", err);
+      }
     }
 
-    const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-    const { clean, errors } = validateRows(parsed.data);
+    if (!clean) {
+      let csvText;
+      try {
+        csvText = await loadCsvText();
+      } catch (err) {
+        showFatalError("Could not load data from Airtable or maintenance_requests.csv. Serve this folder through a local web server, or run generate-data.ps1 and reload.");
+        return;
+      }
 
-    if (clean.length === 0) {
-      showFatalError("No valid rows found in maintenance_requests.csv.");
-      return;
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      const result = validateRows(parsed.data);
+      if (result.clean.length === 0) {
+        showFatalError("No valid rows found in maintenance_requests.csv.");
+        return;
+      }
+      clean = result.clean;
+      errors = result.errors;
+      state.dataSource = "csv";
+      if (errors.length > 0) showValidationBanner(errors, "maintenance_requests.csv");
     }
 
     state.rows = clean;
-    if (errors.length > 0) showValidationBanner(errors);
-
+    updateDataSourceBadge();
     populatePropertySelect(clean);
     renderAll();
   }
