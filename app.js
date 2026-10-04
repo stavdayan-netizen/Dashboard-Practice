@@ -22,6 +22,10 @@
     token: "path6ceZDd1hmWcMV.76d0659562192e1310d4e8cab35369af880c9345fa6b4db664f7a8ca1fc3fedb"
   };
 
+  // The ticket's `property` field is a linked record into this table, so the
+  // names have to be looked up here (the API only returns record IDs).
+  const AIRTABLE_PROPERTIES_TABLE_ID = "tbl7OhvkXrPXmCAuB"; // "Properties"
+
   // Embedded verbatim (kept in sync with demo_upload_sample.csv) so the
   // "Download demo CSV" button works via a generated Blob instead of a
   // direct file link -- browsers block the <a download> attribute for
@@ -183,17 +187,35 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
   const AIRTABLE_TOKEN_PLACEHOLDER = "PASTE_YOUR_READ_ONLY_AIRTABLE_TOKEN_HERE";
 
-  function airtableFieldsToRawRow(fields) {
+  function resolveAirtableProperty(value, propertyNames) {
+    // `property` is a linked-record field, so the API returns an array of
+    // record IDs (e.g. ["recZ81ppp49bEVd4H"]) rather than a name. Translate
+    // the first one via the Properties table. A plain string (the old
+    // single-select format) passes through; an ID we can't resolve becomes
+    // "" so validation reports it instead of showing a raw record ID.
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first === undefined || first === null) return "";
+    if (propertyNames[first]) return propertyNames[first];
+    return /^rec[A-Za-z0-9]{14}$/.test(first) ? "" : String(first);
+  }
+
+  function airtableFieldsToRawRow(fields, propertyNames) {
     // Airtable's REST API returns single/multi-line text and single-select
     // fields as plain strings, date fields as "YYYY-MM-DD", currency fields
-    // as numbers, and omits any field that is empty -- normalize all of
-    // that into the same all-string shape validateRows() expects from CSV
-    // rows (missing/blank -> "").
+    // as numbers, lookup fields as arrays, and omits any field that is
+    // empty -- normalize all of that into the same all-string shape
+    // validateRows() expects from CSV rows (missing/blank -> "").
     const str = (v) => (v === undefined || v === null ? "" : String(v));
+    // Lookup of the linked property's address; kept on every row (not shown
+    // in the UI) for the upcoming vendor-search integration.
+    const fullAddress = [].concat(fields["Full Address"] ?? fields["Full Address Lookup"] ?? [])
+      .filter(Boolean)
+      .join("; ");
     return {
       id: str(fields.id),
       date_created: str(fields.date_created),
-      property: str(fields.property),
+      property: resolveAirtableProperty(fields.property, propertyNames),
+      full_address: fullAddress,
       tenant: str(fields.tenant),
       issue: str(fields.issue),
       category: str(fields.category),
@@ -212,23 +234,36 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       return null; // not configured -- caller falls back to the bundled CSV
     }
 
-    const rawRows = [];
+    const [ticketRecords, propertyRecords] = await Promise.all([
+      fetchAllAirtableRecords(AIRTABLE_CONFIG.tableId),
+      fetchAllAirtableRecords(AIRTABLE_PROPERTIES_TABLE_ID)
+    ]);
+
+    const propertyNames = {};
+    propertyRecords.forEach((record) => {
+      propertyNames[record.id] = (record.fields || {}).Property || "";
+    });
+
+    return ticketRecords.map((record) => airtableFieldsToRawRow(record.fields || {}, propertyNames));
+  }
+
+  async function fetchAllAirtableRecords(tableId) {
+    const records = [];
     let offset = "";
     do {
-      const url = new URL("https://api.airtable.com/v0/" + AIRTABLE_CONFIG.baseId + "/" + AIRTABLE_CONFIG.tableId);
+      const url = new URL("https://api.airtable.com/v0/" + AIRTABLE_CONFIG.baseId + "/" + tableId);
       url.searchParams.set("pageSize", "100");
       if (offset) url.searchParams.set("offset", offset);
 
       const res = await fetch(url, {
         headers: { Authorization: "Bearer " + AIRTABLE_CONFIG.token }
       });
-      if (!res.ok) throw new Error("Airtable request failed: HTTP " + res.status);
+      if (!res.ok) throw new Error("Airtable request failed (" + tableId + "): HTTP " + res.status);
       const data = await res.json();
-      (data.records || []).forEach((record) => rawRows.push(airtableFieldsToRawRow(record.fields || {})));
+      records.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);
-
-    return rawRows;
+    return records;
   }
 
   function validateRows(rawRows) {
@@ -299,7 +334,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
         date_resolved: row.date_resolved || "",
         cost: hasCost ? Number(row.cost) : null,
         cost_date: row.cost_date || "",
-        ai_summary: row.ai_summary || ""
+        ai_summary: row.ai_summary || "",
+        full_address: row.full_address || ""
       });
     });
 
