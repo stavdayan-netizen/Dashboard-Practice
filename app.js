@@ -1009,6 +1009,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     renderCharts(rowsForProperty);
     renderRequestsSection(rowsForProperty);
     renderCosts(state.rows);
+    renderVendorTickets(rowsForProperty);
   }
 
   function wireTabs() {
@@ -1121,6 +1122,288 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     });
   }
 
+  // ---- Vendor Research ---------------------------------------------------
+  // Open tickets -> pick one -> "Find Vendors" asks the local server
+  // (serve.ps1, which holds APIFY_TOKEN from .env) to run the Apify Google
+  // Maps Scraper. The browser never sees the token.
+
+  // First match wins, so the specific rules come before the generic ones.
+  const VENDOR_TERM_RULES = [
+    { re: /\bgas\b.*\b(odor|smell|leak)|\b(odor|smell)\b.*\bgas\b/, term: "gas leak repair" },
+    { re: /water heater/, term: "water heater repair" },
+    { re: /\bboiler\b/, term: "boiler repair" },
+    { re: /\bfurnace\b/, term: "furnace repair" },
+    { re: /\bheat(er|ing)?\b/, term: "heating repair" },
+    { re: /thermostat/, term: "thermostat repair" },
+    { re: /\bac\b|a\/c|air condition|cooling/, term: "air conditioning repair" },
+    { re: /\bvents?\b|airflow|\bducts?\b/, term: "HVAC repair" },
+    { re: /dishwasher/, term: "dishwasher repair" },
+    { re: /washer|washing machine/, term: "washing machine repair" },
+    { re: /dryer/, term: "dryer repair" },
+    { re: /refrigerator|fridge|freezer/, term: "refrigerator repair" },
+    { re: /microwave/, term: "microwave repair" },
+    { re: /\boven\b|\bstove\b|cooktop|\brange\b/, term: "oven repair" },
+    { re: /disposal/, term: "garbage disposal repair" },
+    { re: /burst|flood/, term: "emergency plumber" },
+    { re: /drain|clog|backed up/, term: "drain cleaning" },
+    { re: /garage door/, term: "garage door repair" },
+    { re: /\block(s|ed|ing)?\b|deadbolt|\bkey\b/, term: "locksmith" },
+    { re: /window/, term: "window repair" },
+    { re: /\bdoor\b|hinge|latch|weatherstrip/, term: "door repair" },
+    { re: /carpet/, term: "carpet repair" },
+    { re: /flooring|\bfloor\b/, term: "flooring repair" },
+    { re: /\b(lights?|lighting|outlets?|breaker|wiring|switch)\b/, term: "electrician" },
+    { re: /mold|musty|moisture|damp/, term: "mold remediation" }
+  ];
+
+  const VENDOR_TERM_BY_CATEGORY = {
+    "Plumbing": "plumber",
+    "HVAC": "HVAC repair",
+    "Electrical": "electrician",
+    "Appliance": "appliance repair",
+    "Doors & Locks": "locksmith",
+    "General": "handyman"
+  };
+
+  function deriveVendorSearchTerm(issue, category) {
+    const text = String(issue || "").toLowerCase();
+    const rule = VENDOR_TERM_RULES.find((r) => r.re.test(text));
+    if (rule) return rule.term;
+    return VENDOR_TERM_BY_CATEGORY[category] || "handyman";
+  }
+
+  let vendorTicketId = null;
+  let vendorSearchSeq = 0; // bumped on every search/selection so stale responses are ignored
+  let vendorServerState = "unknown"; // "ready" | "no-token" | "unavailable"
+
+  function isVendorMode() {
+    return document.getElementById("main-content").classList.contains("vendor-mode");
+  }
+
+  function selectedVendorTicket() {
+    return state.rows.find((r) => r.id === vendorTicketId) || null;
+  }
+
+  function renderVendorTickets(rowsForProperty) {
+    const list = document.getElementById("vendor-ticket-list");
+    const empty = document.getElementById("vendor-tickets-empty");
+    const openRows = sortOpenRows(rowsForProperty.filter((r) => OPEN_STATUSES.includes(r.status)));
+    document.getElementById("vendor-ticket-count").textContent = "(" + openRows.length + ")";
+
+    list.innerHTML = "";
+    empty.hidden = openRows.length > 0;
+    empty.textContent = "No open tickets for " + propertyLabel() + ".";
+
+    const selectionLost = !!vendorTicketId && !openRows.some((r) => r.id === vendorTicketId);
+    if (selectionLost) {
+      vendorTicketId = null;
+      vendorSearchSeq++;
+    }
+
+    openRows.forEach((row) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vendor-ticket";
+      btn.dataset.ticketId = row.id;
+      btn.setAttribute("aria-pressed", String(row.id === vendorTicketId));
+
+      const top = document.createElement("span");
+      top.className = "vendor-ticket-top";
+      top.appendChild(document.createTextNode(row.id));
+      top.appendChild(badge(row.priority, PRIORITY_BADGE_CLASS));
+      const issue = document.createElement("span");
+      issue.className = "vendor-ticket-issue";
+      issue.textContent = row.issue;
+      const meta = document.createElement("span");
+      meta.className = "vendor-ticket-meta";
+      meta.textContent = row.property + " · " + row.category + " · " + row.status;
+
+      btn.append(top, issue, meta);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+
+    if (selectionLost) renderVendorDetail();
+  }
+
+  function setVendorStatus(message, isError) {
+    const el = document.getElementById("vendor-status");
+    el.textContent = message;
+    el.classList.toggle("is-error", !!isError);
+  }
+
+  function renderVendorDetail() {
+    const ticket = selectedVendorTicket();
+    document.getElementById("vendor-detail-empty").hidden = !!ticket;
+    document.getElementById("vendor-detail-body").hidden = !ticket;
+    document.getElementById("vendor-results").innerHTML = "";
+    setVendorStatus("", false);
+    if (!ticket) return;
+
+    document.getElementById("vendor-fact-ticket").textContent = ticket.id + " · " + ticket.property + " · " + ticket.category;
+    document.getElementById("vendor-fact-issue").textContent = ticket.issue || "-";
+    document.getElementById("vendor-fact-address").textContent = ticket.full_address || "No address on file";
+    updateFindVendorsButton();
+  }
+
+  function updateFindVendorsButton(searching) {
+    const btn = document.getElementById("find-vendors-btn");
+    const ticket = selectedVendorTicket();
+    btn.disabled = !!searching || !ticket || !ticket.full_address || vendorServerState !== "ready";
+    btn.textContent = searching ? "Searching…" : "Find Vendors";
+    if (ticket && !ticket.full_address && !searching) {
+      setVendorStatus("This ticket has no full address, so vendors can't be searched. The address comes from the Airtable Properties lookup.", true);
+    }
+  }
+
+  async function checkVendorServer() {
+    const note = document.getElementById("vendor-note");
+    try {
+      const res = await fetch("/api/status", { cache: "no-store" });
+      const data = res.ok ? await res.json() : null;
+      vendorServerState = data && data.vendorSearch ? "ready" : data ? "no-token" : "unavailable";
+    } catch (err) {
+      vendorServerState = "unavailable";
+    }
+
+    note.hidden = vendorServerState === "ready";
+    if (vendorServerState === "no-token") {
+      note.textContent = "Vendor search is off: add APIFY_TOKEN to the local .env file and restart serve.ps1.";
+    } else if (vendorServerState === "unavailable") {
+      note.textContent = "Vendor search only works on the local server (powershell -ExecutionPolicy Bypass -File serve.ps1, with APIFY_TOKEN in .env). It isn't available on the public site or when the page is opened directly as a file.";
+    }
+    updateFindVendorsButton();
+  }
+
+  function safeHttpUrl(value) {
+    try {
+      const url = new URL(String(value));
+      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function vendorLinkCell(value, label) {
+    const url = safeHttpUrl(value);
+    if (!url) return document.createTextNode("-");
+    const a = document.createElement("a");
+    a.href = url.href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = label || url.hostname.replace(/^www\./, "");
+    return a;
+  }
+
+  function renderVendors(vendors) {
+    const wrap = document.getElementById("vendor-results");
+    wrap.innerHTML = "";
+    vendors.forEach((v) => {
+      const card = document.createElement("article");
+      card.className = "vendor-card";
+
+      const name = document.createElement("h4");
+      name.textContent = v.name || "-";
+      const category = document.createElement("p");
+      category.className = "vendor-card-category";
+      category.textContent = v.category || "-";
+
+      const dl = document.createElement("dl");
+      const add = (label, content) => {
+        const dt = document.createElement("dt");
+        dt.textContent = label;
+        const dd = document.createElement("dd");
+        dd.appendChild(typeof content === "string" ? document.createTextNode(content) : content);
+        dl.append(dt, dd);
+      };
+      const hasRating = v.rating !== null && v.rating !== undefined && v.rating !== "";
+      const hasReviews = v.reviews !== null && v.reviews !== undefined && v.reviews !== "";
+      add("Rating", hasRating ? Number(v.rating).toFixed(1) + " / 5" : "-");
+      add("Reviews", hasReviews ? Number(v.reviews).toLocaleString("en-US") : "-");
+      add("Phone", v.phone || "-");
+      add("Website", vendorLinkCell(v.website));
+      add("Google Maps", vendorLinkCell(v.mapsUrl, "Open in Google Maps"));
+
+      card.append(name, category, dl);
+      wrap.appendChild(card);
+    });
+  }
+
+  async function pollVendorRun(runId, seq) {
+    const deadline = Date.now() + 4 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      if (seq !== vendorSearchSeq) return null;
+      const res = await fetch("/api/vendors/result?runId=" + encodeURIComponent(runId), { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "The vendor search failed (HTTP " + res.status + ").");
+      if (data.status !== "RUNNING") return data;
+    }
+    throw new Error("The vendor search took too long. Please try again.");
+  }
+
+  async function findVendors() {
+    const ticket = selectedVendorTicket();
+    if (!ticket || !ticket.full_address) return;
+
+    const seq = ++vendorSearchSeq;
+    const term = deriveVendorSearchTerm(ticket.issue, ticket.category);
+    document.getElementById("vendor-results").innerHTML = "";
+    updateFindVendorsButton(true);
+    setVendorStatus("Searching Google Maps for “" + term + "” near " + ticket.full_address + "…", false);
+
+    try {
+      const startRes = await fetch("/api/vendors/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ searchTerm: term, location: ticket.full_address })
+      });
+      const started = await startRes.json().catch(() => ({}));
+      if (!startRes.ok) throw new Error(started.error || "Could not start the vendor search (HTTP " + startRes.status + ").");
+
+      const result = await pollVendorRun(started.runId, seq);
+      if (!result || seq !== vendorSearchSeq) return;
+
+      if (result.status !== "SUCCEEDED") {
+        throw new Error(result.message || "The vendor search did not complete.");
+      }
+      if (result.vendors.length === 0) {
+        setVendorStatus("No vendors found for “" + term + "” near " + ticket.full_address + ".", false);
+      } else {
+        renderVendors(result.vendors);
+        setVendorStatus("Top " + result.vendors.length + " vendor" + (result.vendors.length === 1 ? "" : "s") + " for “" + term + "” near " + ticket.full_address + ".", false);
+      }
+    } catch (err) {
+      if (seq === vendorSearchSeq) setVendorStatus(err.message || "The vendor search failed.", true);
+    } finally {
+      if (seq === vendorSearchSeq) updateFindVendorsButton(false);
+    }
+  }
+
+  function setVendorMode(on) {
+    document.getElementById("main-content").classList.toggle("vendor-mode", on);
+    const btn = document.getElementById("vendor-view-btn");
+    btn.setAttribute("aria-pressed", String(on));
+    btn.textContent = on ? "← Back to Dashboard" : "Vendor Research";
+    if (on) checkVendorServer();
+  }
+
+  function wireVendorResearch() {
+    document.getElementById("vendor-view-btn").addEventListener("click", () => setVendorMode(!isVendorMode()));
+    document.getElementById("find-vendors-btn").addEventListener("click", findVendors);
+    document.getElementById("vendor-ticket-list").addEventListener("click", (e) => {
+      const btn = e.target.closest(".vendor-ticket");
+      if (!btn) return;
+      vendorTicketId = btn.dataset.ticketId;
+      vendorSearchSeq++;
+      document.querySelectorAll(".vendor-ticket").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      renderVendorDetail();
+    });
+  }
+
   function updateDataSourceBadge() {
     const badge = document.getElementById("data-source-badge");
     if (state.dataSource === "airtable") {
@@ -1142,6 +1425,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     wireNewRequestDialog();
     wireCsvUpload();
     wireDemoCsvDownload();
+    wireVendorResearch();
 
     let clean = null;
     let errors = [];

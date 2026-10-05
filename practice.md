@@ -17,7 +17,7 @@ Tenant Maintenance Dashboard: a single-page demo for a property manager. Vanilla
 - `index.html`, `styles.css`, `app.js` — the app. PapaParse (CSV) and Chart.js (charts) load from CDN.
 - `maintenance_requests.csv` — 40-row fallback data. `data.js` is generated from it by `generate-data.ps1`; rerun that script after editing the CSV.
 - `demo_upload_sample.csv` — 36-row file for "Download demo CSV". `DEMO_CSV` in `app.js` must stay identical to it.
-- `serve.ps1` — local static server. `README.md` documents setup. `SPEC.MD` is the original build brief.
+- `serve.ps1` — local server: static files plus the `/api/*` routes behind Vendor Research, which read `APIFY_TOKEN` from `.env`. It must keep refusing to serve dotfiles. `.env.example` lists the variable names. `README.md` documents setup. `SPEC.MD` is the original build brief.
 
 ## Data conventions
 
@@ -56,6 +56,7 @@ Tenant Maintenance Dashboard: a single-page demo for a property manager. Vanilla
 
 - Put credentials in a gitignored `.env` and read them from environment variables. Commit a `.env.example` with variable names and placeholder values only.
 - The site is static, so browser code can't read environment variables. Anything that needs a private credential must run outside the browser (a local script or a serverless function). Ask the user which approach before building it.
+- Pattern to follow (see Vendor Research): the token lives in `.env`, `serve.ps1` calls the external service, and the browser only talks to local `/api/*` routes. That screen is local-only; on GitHub Pages it shows a notice and stays disabled.
 - Don't write real credential values into files yourself. Leave a placeholder and tell the user where to paste it. Never print tokens in output, commits, or docs; redact them when showing config.
 - **Known exception:** `AIRTABLE_CONFIG.token` in `app.js` is a read-only token (`data.records:read`) scoped to this one base, deliberately public so the Pages site works without a login. Don't copy this pattern for other services, and never swap in a broader token.
 - Airtable ID values (base, table, record) are not secrets.

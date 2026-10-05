@@ -673,9 +673,205 @@ section h2 {
   margin-top: 20px;
 }
 
+/* Vendor Research */
+
+.vendor-section {
+  display: none;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+}
+
+/* Vendor mode swaps the dashboard sections for this one; the status banner stays. */
+#main-content.vendor-mode > section:not(.vendor-section) {
+  display: none;
+}
+
+#main-content.vendor-mode > .vendor-section {
+  display: block;
+}
+
+.vendor-section [hidden] {
+  display: none;
+}
+
+.vendor-note {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-medium-bg);
+  border: 1px solid var(--color-medium-border);
+  color: var(--color-medium);
+  font-size: 0.9rem;
+}
+
+.vendor-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.vendor-picker h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.vendor-ticket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.vendor-ticket {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vendor-ticket:hover {
+  background: var(--color-accent-light);
+}
+
+.vendor-ticket[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-light);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.vendor-ticket:focus-visible,
+.vendor-results a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.vendor-ticket-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.vendor-ticket-issue {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.vendor-ticket-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.vendor-detail {
+  min-width: 0;
+}
+
+.vendor-facts {
+  margin: 0 0 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 16px;
+}
+
+.vendor-facts dt {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.vendor-facts dd {
+  margin: 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.vendor-status {
+  margin: 14px 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.vendor-status.is-error {
+  color: var(--color-urgent);
+}
+
+.vendor-results {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.vendor-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  min-width: 0;
+}
+
+.vendor-card h4 {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.vendor-card-category {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.vendor-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 0.88rem;
+}
+
+.vendor-card dt {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.vendor-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.vendor-card a {
+  color: var(--color-accent-dark);
+}
+
 /* Responsive */
 
 @media (max-width: 900px) {
+  .vendor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vendor-ticket-list {
+    max-height: 320px;
+  }
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }

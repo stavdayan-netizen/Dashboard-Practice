@@ -60,3 +60,22 @@ const AIRTABLE_CONFIG = {
 **What happens without a valid token:** `init()` in `app.js` tries Airtable first; if the request fails for any reason (bad/missing token, network issue, rate limit), it silently falls back to the bundled `maintenance_requests.csv` (or the embedded `data.js` copy). A small badge next to the page title ("Live: Airtable" / "Sample data (CSV)") always shows which one is actually active.
 
 **Regenerating the token:** if you ever need a fresh one, create it at [airtable.com/create/tokens](https://airtable.com/create/tokens) scoped the same way (one base, `data.records:read` only), then replace the `token` value in `AIRTABLE_CONFIG`.
+
+## Vendor Research
+
+The **Vendor Research** header button opens a second screen that lists only open tickets. Select one to see its issue and full address (from the Airtable `Full Address` lookup), then click **Find Vendors**. Only then does the app:
+
+1. Derive a short search term from the ticket's issue and category (`deriveVendorSearchTerm()` in `app.js`, e.g. "Furnace not producing heat" → "furnace repair").
+2. Run Apify's Google Maps Scraper (`compass/crawler-google-places`) for "`<term> near <full address>`" and show up to 5 vendors with name, category, rating, review count, phone, website, and a Google Maps link.
+
+The Apify token must never reach the browser, so this screen only works through the local server, which keeps it in `.env`:
+
+1. Copy `.env.example` to `.env` and set `APIFY_TOKEN=` to your Apify API token (`.env` is gitignored).
+2. Run `powershell -ExecutionPolicy Bypass -File serve.ps1` and open `http://localhost:8531`.
+
+On the public GitHub Pages site (or a page opened as a file) the screen still opens, but shows a notice and the button stays disabled.
+
+Notes:
+- Each search starts one Apify run, about $0.03 (start fee plus 5 places), capped at $0.50 per run. A run usually takes 15–60 seconds.
+- The address goes into the Google Maps search text instead of the actor's `locationQuery` field, because that field can't geocode street addresses.
+- `serve.ps1` refuses to serve dotfiles such as `.env`, only accepts searches from the page it serves, and exposes `/api/status`, `/api/vendors/search` and `/api/vendors/result` on localhost only.
