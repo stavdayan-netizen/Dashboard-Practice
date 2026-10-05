@@ -79,3 +79,23 @@ Notes:
 - Each search starts one Apify run, about $0.03 (start fee plus 5 places), capped at $0.50 per run. A run usually takes 15–60 seconds.
 - The address goes into the Google Maps search text instead of the actor's `locationQuery` field, because that field can't geocode street addresses.
 - `serve.ps1` refuses to serve dotfiles such as `.env`, only accepts searches from the page it serves, and exposes `/api/status`, `/api/vendors/search` and `/api/vendors/result` on localhost only.
+
+## Weather & Property Alerts
+
+Between the KPI cards and the charts, a **Weather & Property Alerts** section shows one card per property (just the selected property when the Property filter is set). Each card has today's weather with an illustration, a 7-day forecast strip, and maintenance alerts for the next 7 days, grouped by day, with today's alerts highlighted. A card with alerts today gets a red (high risk) or orange (moderate) ring.
+
+How it works (all in `app.js`, no API keys, and it works on the public GitHub Pages site too):
+
+1. The property's full address (the Airtable `Full Address` lookup) is located with the **US Census Geocoder**. It sends no CORS headers, so the page uses its JSONP mode. Exact matches are cached in the browser's `localStorage`. If the Census has no match, the card falls back to the address's ZIP area and says the location is approximate.
+2. The 7-day forecast comes from **Open-Meteo** (free for non-commercial use, up to 10,000 calls a day; attribution to Open-Meteo is shown under the cards). Forecasts are kept in memory for 15 minutes, so changing the Property filter doesn't refetch.
+3. Alerts are simple rules over the daily forecast, not official warnings:
+
+| Alert | Moderate risk | High risk |
+| --- | --- | --- |
+| Freezing temperatures / hard freeze | low at or below 32°F | low at or below 20°F |
+| Heavy rain | 1 in or more in a day | 2 in or more |
+| Snow | 1 in or more | 4 in or more |
+| Strong winds | gusts of 40 mph or more | 58 mph or more |
+| Extreme heat | high of 90°F or more | 100°F or more |
+
+The thresholds live in `alertsForDay()` in `app.js`. The section needs each property's full address, so it shows a short notice instead of cards when the data comes from the sample CSV or an uploaded CSV (those rows have no address).

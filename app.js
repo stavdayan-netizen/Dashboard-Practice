@@ -1010,6 +1010,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   function renderAll() {
     const rowsForProperty = filterByProperty(state.rows, state.property);
     renderKpis(rowsForProperty);
+    renderWeather();
     renderCharts(rowsForProperty);
     renderRequestsSection(rowsForProperty);
     renderCosts(state.rows);
@@ -1123,6 +1124,537 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   function wireDemoCsvDownload() {
     document.getElementById("demo-csv-link").addEventListener("click", () => {
       downloadTextFile("demo_upload_sample.csv", DEMO_CSV, "text/csv");
+    });
+  }
+
+  // ---- Weather & Property Alerts -----------------------------------------
+  // One card per property: the full address is located with the US Census
+  // Geocoder, a 7-day forecast comes from Open-Meteo, and the card shows
+  // today's weather, a 7-day strip, and rule-based maintenance alerts.
+  // Neither service needs an API key.
+
+  const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+  const GEOCODE_CACHE_KEY = "dashboardPractice.geocodes.v1";
+  const weatherCache = new Map(); // full address -> { status, data, error, fetchedAt, refreshing }
+
+  const WEATHER_CODES = {
+    0: ["Clear sky", "clear"], 1: ["Mainly clear", "clear"], 2: ["Partly cloudy", "partly"], 3: ["Overcast", "cloudy"],
+    45: ["Fog", "fog"], 48: ["Freezing fog", "fog"],
+    51: ["Light drizzle", "drizzle"], 53: ["Drizzle", "drizzle"], 55: ["Heavy drizzle", "drizzle"],
+    56: ["Freezing drizzle", "freezing-rain"], 57: ["Freezing drizzle", "freezing-rain"],
+    61: ["Light rain", "rain"], 63: ["Rain", "rain"], 65: ["Heavy rain", "heavy-rain"],
+    66: ["Freezing rain", "freezing-rain"], 67: ["Heavy freezing rain", "freezing-rain"],
+    71: ["Light snow", "snow"], 73: ["Snow", "snow"], 75: ["Heavy snow", "snow"], 77: ["Snow grains", "snow"],
+    80: ["Light rain showers", "rain"], 81: ["Rain showers", "rain"], 82: ["Violent rain showers", "heavy-rain"],
+    85: ["Snow showers", "snow"], 86: ["Heavy snow showers", "snow"],
+    95: ["Thunderstorm", "thunder"], 96: ["Thunderstorm with hail", "thunder"], 99: ["Severe thunderstorm with hail", "thunder"]
+  };
+
+  function describeWeather(code, isDay) {
+    const entry = WEATHER_CODES[code] || ["Unknown", "cloudy"];
+    return { label: entry[0], kind: entry[1], night: isDay === 0 };
+  }
+
+  function weatherThemeFor(info) {
+    if (info.kind === "clear" || info.kind === "partly") return info.night ? "night" : "sunny";
+    if (info.kind === "drizzle" || info.kind === "rain" || info.kind === "heavy-rain" || info.kind === "freezing-rain") return "rain";
+    return info.kind; // cloudy, fog, snow, thunder
+  }
+
+  // -- Illustrations (static SVG strings; no user data is ever put in them) --
+
+  const CLOUD_PATH = "M26 56 C12 56 4 47 4 37 C4 27 12 20 22 19 C25 8 35 1 47 1 C59 1 68 7 72 17 C85 17 96 26 96 38 C96 48 88 56 76 56 Z";
+  const CLOUD_WHITE = ["#FFFFFF", "#B9C6DA"];
+  const CLOUD_GRAY = ["#E4EAF2", "#A9B7CC"];
+  const CLOUD_DARK = ["#CBD3E3", "#97A5BF"];
+  const CLOUD_STORM = ["#CFC9E6", "#9A93C0"];
+
+  function svgCloud(x, y, scale, colors) {
+    return '<g transform="translate(' + x + " " + y + ") scale(" + scale + ')"><path d="' + CLOUD_PATH +
+      '" fill="' + colors[0] + '" stroke="' + colors[1] + '" stroke-width="3" stroke-linejoin="round"/></g>';
+  }
+
+  function svgSun(cx, cy, r) {
+    let rays = "";
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      rays += '<line x1="' + (cx + Math.cos(a) * (r + 6)).toFixed(1) + '" y1="' + (cy + Math.sin(a) * (r + 6)).toFixed(1) +
+        '" x2="' + (cx + Math.cos(a) * (r + 14)).toFixed(1) + '" y2="' + (cy + Math.sin(a) * (r + 14)).toFixed(1) + '"/>';
+    }
+    return '<g stroke="#F5C75A" stroke-width="4" stroke-linecap="round">' + rays + "</g>" +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#FDE08A" stroke="#F0B94A" stroke-width="3"/>';
+  }
+
+  function svgMoon(cx, cy, r) {
+    const d = r * 0.55;
+    const h = Math.sqrt(r * r - (d / 2) * (d / 2));
+    const tx = (cx + d / 2).toFixed(1);
+    return '<path d="M' + tx + " " + (cy - h).toFixed(1) + " A" + r + " " + r + " 0 1 0 " + tx + " " + (cy + h).toFixed(1) +
+      " A" + r + " " + r + " 0 0 1 " + tx + " " + (cy - h).toFixed(1) +
+      ' Z" fill="#F6EFC8" stroke="#D9CC8E" stroke-width="3" stroke-linejoin="round"/>';
+  }
+
+  function svgDrops(xs, y, length, width) {
+    return '<g stroke="#6FAEE0" stroke-width="' + width + '" stroke-linecap="round">' +
+      xs.map((x) => '<path d="M' + x + " " + y + " l-" + (length * 0.28).toFixed(1) + " " + length + '"/>').join("") + "</g>";
+  }
+
+  function svgFlake(x, y) {
+    return '<g transform="translate(' + x + " " + y + ')" stroke="#8FC1EA" stroke-width="3" stroke-linecap="round">' +
+      '<path d="M-6 0H6M0 -6V6M-4.2 -4.2L4.2 4.2M-4.2 4.2L4.2 -4.2"/></g>';
+  }
+
+  function weatherIconSvg(kind, night) {
+    let body = "";
+    switch (kind) {
+      case "clear":
+        body = night
+          ? svgMoon(58, 62, 32) + '<g fill="#F6EFC8"><circle cx="96" cy="26" r="3"/><circle cx="104" cy="52" r="2"/><circle cx="26" cy="22" r="2.5"/></g>'
+          : svgSun(60, 60, 28);
+        break;
+      case "partly":
+        body = (night ? svgMoon(42, 42, 24) : svgSun(42, 42, 22)) + svgCloud(14, 46, 0.95, CLOUD_WHITE);
+        break;
+      case "cloudy":
+        body = svgCloud(40, 18, 0.7, CLOUD_GRAY) + svgCloud(8, 40, 1, CLOUD_WHITE);
+        break;
+      case "fog":
+        body = svgCloud(16, 12, 0.9, CLOUD_WHITE) +
+          '<g stroke="#B4C0D1" stroke-width="5" stroke-linecap="round"><path d="M22 80H98M32 92H88M22 104H98"/></g>';
+        break;
+      case "drizzle":
+        body = svgCloud(10, 16, 1, CLOUD_GRAY) + svgDrops([36, 58, 80], 88, 10, 3.5);
+        break;
+      case "rain":
+        body = svgCloud(10, 14, 1, CLOUD_GRAY) + svgDrops([34, 52, 70, 88], 82, 16, 4);
+        break;
+      case "heavy-rain":
+        body = svgCloud(10, 8, 1, CLOUD_DARK) + svgDrops([26, 58, 90], 76, 14, 4.5) + svgDrops([42, 74], 94, 14, 4.5);
+        break;
+      case "freezing-rain":
+        body = svgCloud(10, 14, 1, CLOUD_GRAY) + svgDrops([34, 72], 82, 16, 4) + svgFlake(54, 98) + svgFlake(92, 98);
+        break;
+      case "snow":
+        body = svgCloud(10, 14, 1, CLOUD_WHITE) + svgFlake(34, 90) + svgFlake(62, 102) + svgFlake(88, 90);
+        break;
+      case "thunder":
+        body = svgCloud(10, 6, 1, CLOUD_STORM) + svgDrops([28, 94], 76, 14, 4) +
+          '<polygon points="64,58 46,90 60,90 52,116 84,80 68,80 78,58" fill="#FFD24D" stroke="#E0A92B" stroke-width="2.5" stroke-linejoin="round"/>';
+        break;
+      default:
+        body = svgCloud(10, 30, 1, CLOUD_GRAY);
+    }
+    return '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">' + body + "</svg>";
+  }
+
+  const ALERT_ICON_PATHS = {
+    freeze: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/>',
+    rain: '<path d="M12 3C12 3 5 11 5 15a7 7 0 0 0 14 0C19 11 12 3 12 3Z"/>',
+    snow: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 4l3 2 3-2M9 20l3-2 3 2"/>',
+    wind: '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>',
+    heat: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+    ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+  };
+
+  function alertIconSvg(type) {
+    return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ALERT_ICON_PATHS[type] || "") + "</svg>";
+  }
+
+  // -- Maintenance alert rules (units: °F, inches, mph) --
+
+  function alertsForDay(day) {
+    const out = [];
+    if (day.low <= 32) {
+      const hard = day.low <= 20;
+      out.push({
+        type: "freeze", risk: hard ? "high" : "moderate", title: hard ? "Hard freeze" : "Freezing temperatures",
+        detail: "Low " + Math.round(day.low) + "°F. Protect exposed pipes and outdoor spigots, and confirm heat is working."
+      });
+    }
+    if (day.rain >= 1) {
+      out.push({
+        type: "rain", risk: day.rain >= 2 ? "high" : "moderate", title: "Heavy rain",
+        detail: "About " + day.rain.toFixed(1) + " in of rain. Check gutters, drains, sump pumps, and basements."
+      });
+    }
+    if (day.snow >= 1) {
+      out.push({
+        type: "snow", risk: day.snow >= 4 ? "high" : "moderate", title: "Snow",
+        detail: "About " + day.snow.toFixed(1) + " in of snow. Plan plowing and salting, and check walkways and roof load."
+      });
+    }
+    if (day.gust >= 40) {
+      out.push({
+        type: "wind", risk: day.gust >= 58 ? "high" : "moderate", title: "Strong winds",
+        detail: "Gusts up to " + Math.round(day.gust) + " mph. Secure loose items; watch roofs, fences, and trees."
+      });
+    }
+    if (day.high >= 90) {
+      out.push({
+        type: "heat", risk: day.high >= 100 ? "high" : "moderate", title: "Extreme heat",
+        detail: "High " + Math.round(day.high) + "°F. Expect heavy AC demand; check cooling systems."
+      });
+    }
+    return out;
+  }
+
+  function alertsByDay(days) {
+    return days
+      .map((day, index) => ({ index, date: day.date, alerts: alertsForDay(day) }))
+      .filter((d) => d.alerts.length > 0);
+  }
+
+  // -- Location + forecast lookups --
+
+  function readGeocodeCache() {
+    try { return JSON.parse(localStorage.getItem(GEOCODE_CACHE_KEY) || "{}") || {}; } catch (err) { return {}; }
+  }
+
+  function writeGeocodeCache(address, value) {
+    try {
+      const cache = readGeocodeCache();
+      cache[address] = value;
+      localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+    } catch (err) { /* storage unavailable: just skip caching */ }
+  }
+
+  let jsonpCounter = 0;
+
+  // The Census geocoder sends no CORS headers, so a normal fetch() from the
+  // page is blocked; its JSONP mode works from anywhere.
+  function jsonpRequest(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const callbackName = "__dashboardJsonp" + (++jsonpCounter);
+      const script = document.createElement("script");
+      const finish = () => {
+        clearTimeout(timer);
+        delete window[callbackName];
+        script.remove();
+      };
+      const timer = setTimeout(() => { finish(); reject(new Error("The address lookup timed out")); }, timeoutMs || 15000);
+      window[callbackName] = (data) => { finish(); resolve(data); };
+      script.onerror = () => { finish(); reject(new Error("The address lookup failed")); };
+      script.src = url + "&callback=" + callbackName;
+      document.head.appendChild(script);
+    });
+  }
+
+  async function geocodeAddress(address) {
+    const cached = readGeocodeCache()[address];
+    if (cached) return cached;
+
+    let result = null;
+    try {
+      const data = await jsonpRequest(
+        "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=jsonp&address=" + encodeURIComponent(address)
+      );
+      const match = data && data.result && data.result.addressMatches && data.result.addressMatches[0];
+      if (match) result = { lat: match.coordinates.y, lon: match.coordinates.x, approximate: false };
+    } catch (err) {
+      // fall through to the ZIP-area fallback
+    }
+
+    if (result) {
+      writeGeocodeCache(address, result);
+      return result;
+    }
+
+    // No exact match: use the ZIP code's area (not cached, so the exact lookup is retried next time).
+    const zip = (address.match(/\b(\d{5})(?:-\d{4})?\s*$/) || [])[1];
+    if (zip) {
+      const res = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + zip);
+      if (res.ok) {
+        const data = await res.json();
+        const hit = (data.results || []).find((r) => r.country_code === "US");
+        if (hit) return { lat: hit.latitude, lon: hit.longitude, approximate: true };
+      }
+    }
+    throw new Error("Could not locate this address");
+  }
+
+  async function fetchForecast(lat, lon) {
+    const params = new URLSearchParams({
+      latitude: lat, longitude: lon, timezone: "auto", forecast_days: "7",
+      temperature_unit: "fahrenheit", wind_speed_unit: "mph", precipitation_unit: "inch",
+      current: "temperature_2m,apparent_temperature,relative_humidity_2m,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum,wind_gusts_10m_max,sunrise,sunset"
+    });
+    const res = await fetch("https://api.open-meteo.com/v1/forecast?" + params.toString());
+    if (!res.ok) throw new Error("The weather service returned an error (HTTP " + res.status + ")");
+    const raw = await res.json();
+
+    const num = (v, fallback) => (typeof v === "number" ? v : fallback);
+    const d = raw.daily;
+    return {
+      current: {
+        temp: raw.current.temperature_2m,
+        feels: raw.current.apparent_temperature,
+        humidity: raw.current.relative_humidity_2m,
+        isDay: raw.current.is_day,
+        code: raw.current.weather_code,
+        wind: raw.current.wind_speed_10m,
+        windDir: raw.current.wind_direction_10m,
+        gust: raw.current.wind_gusts_10m
+      },
+      days: d.time.map((date, i) => ({
+        date,
+        code: d.weather_code[i],
+        high: d.temperature_2m_max[i],
+        low: d.temperature_2m_min[i],
+        rainChance: num(d.precipitation_probability_max[i], 0),
+        rain: num(d.rain_sum[i], 0) + num(d.showers_sum[i], 0),
+        snow: num(d.snowfall_sum[i], 0),
+        gust: num(d.wind_gusts_10m_max[i], 0),
+        sunrise: d.sunrise[i],
+        sunset: d.sunset[i]
+      }))
+    };
+  }
+
+  async function loadWeather(address) {
+    const geo = await geocodeAddress(address);
+    const forecast = await fetchForecast(geo.lat, geo.lon);
+    return { geo, current: forecast.current, days: forecast.days };
+  }
+
+  // Starts a fetch when there's no usable cache entry; the section re-renders when it finishes.
+  function ensureWeather(address) {
+    const entry = weatherCache.get(address);
+    if (entry && (entry.status === "loading" || entry.status === "error")) return;
+    if (entry && entry.status === "ok" && (entry.refreshing || Date.now() - entry.fetchedAt < WEATHER_REFRESH_MS)) return;
+
+    if (entry) entry.refreshing = true;
+    else weatherCache.set(address, { status: "loading" });
+
+    loadWeather(address)
+      .then((data) => {
+        weatherCache.set(address, { status: "ok", data, fetchedAt: Date.now() });
+      })
+      .catch((err) => {
+        // Keep showing older data if a background refresh fails.
+        if (entry && entry.data) { entry.refreshing = false; entry.fetchedAt = Date.now(); }
+        else weatherCache.set(address, { status: "error", error: err.message || "Weather is unavailable", fetchedAt: Date.now() });
+      })
+      .finally(renderWeather);
+  }
+
+  // -- Rendering --
+
+  function makeEl(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+
+  function formatClock(iso) {
+    const m = /T(\d{2}):(\d{2})/.exec(String(iso));
+    if (!m) return "-";
+    const hour = Number(m[1]);
+    return ((hour % 12) || 12) + ":" + m[2] + " " + (hour >= 12 ? "PM" : "AM");
+  }
+
+  function dayLabel(date, index) {
+    if (index === 0) return "Today";
+    return toDateObj(date).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  }
+
+  function fullDayLabel(date, index) {
+    const text = toDateObj(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+    if (index === 0) return "Today · " + text;
+    if (index === 1) return "Tomorrow · " + text;
+    return text;
+  }
+
+  function weatherStat(label, value, extraNode) {
+    const li = makeEl("li", "weather-stat");
+    li.appendChild(makeEl("span", "weather-stat-label", label));
+    const val = makeEl("span", "weather-stat-value");
+    if (extraNode) val.appendChild(extraNode);
+    val.appendChild(document.createTextNode(value));
+    li.appendChild(val);
+    return li;
+  }
+
+  function buildWeatherHero(data) {
+    const cur = data.current;
+    const today = data.days[0];
+    const info = describeWeather(cur.code, cur.isDay);
+
+    const hero = makeEl("div", "weather-hero weather-theme-" + weatherThemeFor(info));
+    const main = makeEl("div", "weather-hero-main");
+    main.appendChild(makeEl("div", "weather-temp", Math.round(cur.temp) + "°"));
+    main.appendChild(makeEl("div", "weather-condition", info.label));
+    main.appendChild(makeEl("div", "weather-range",
+      "Feels like " + Math.round(cur.feels) + "° · H " + Math.round(today.high) + "° / L " + Math.round(today.low) + "°"));
+
+    const art = makeEl("div", "weather-art");
+    art.setAttribute("aria-hidden", "true");
+    art.innerHTML = weatherIconSvg(info.kind, info.night);
+
+    const arrow = makeEl("span", "weather-wind-arrow");
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.style.transform = "rotate(" + (Math.round(cur.windDir) + 180) + "deg)";
+    arrow.textContent = "↑";
+
+    const stats = makeEl("ul", "weather-stats");
+    stats.appendChild(weatherStat("Wind", Math.round(cur.wind) + " mph " + COMPASS[Math.round(cur.windDir / 22.5) % 16], arrow));
+    stats.appendChild(weatherStat("Gusts", Math.round(cur.gust) + " mph"));
+    stats.appendChild(weatherStat("Humidity", Math.round(cur.humidity) + "%"));
+    stats.appendChild(weatherStat("Rain chance", Math.round(today.rainChance) + "%"));
+    stats.appendChild(weatherStat("Sunrise / sunset", formatClock(today.sunrise) + " / " + formatClock(today.sunset)));
+
+    hero.append(main, art, stats);
+    return hero;
+  }
+
+  function buildForecastStrip(data, alertDays) {
+    const list = makeEl("ol", "weather-forecast");
+    list.setAttribute("aria-label", "7-day forecast");
+    data.days.forEach((day, i) => {
+      // Today's icon follows the current conditions shown above, like a weather app.
+      const info = describeWeather(i === 0 ? data.current.code : day.code, 1);
+      const li = makeEl("li", "weather-day" + (i === 0 ? " is-today" : ""));
+      li.title = info.label + ", " + Math.round(day.rainChance) + "% chance of rain";
+
+      li.appendChild(makeEl("span", "weather-day-name", dayLabel(day.date, i)));
+      const icon = makeEl("span", "weather-day-icon");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = weatherIconSvg(info.kind, false);
+      li.appendChild(icon);
+      li.appendChild(makeEl("span", "visually-hidden", info.label));
+      li.appendChild(makeEl("span", "weather-day-high", Math.round(day.high) + "°"));
+      li.appendChild(makeEl("span", "weather-day-low", Math.round(day.low) + "°"));
+
+      const flagged = alertDays.find((a) => a.index === i);
+      if (flagged) {
+        const high = flagged.alerts.some((a) => a.risk === "high");
+        const dot = makeEl("span", "weather-day-flag weather-day-flag--" + (high ? "high" : "moderate"));
+        dot.title = flagged.alerts.map((a) => a.title).join(", ");
+        li.appendChild(dot);
+        li.appendChild(makeEl("span", "visually-hidden", "Maintenance alert: " + dot.title));
+      }
+      list.appendChild(li);
+    });
+    return list;
+  }
+
+  function buildAlertsBlock(alertDays) {
+    const block = makeEl("div", "weather-alerts");
+    block.appendChild(makeEl("h4", "weather-alerts-title", "Maintenance alerts · next 7 days"));
+
+    if (alertDays.length === 0) {
+      const none = makeEl("p", "weather-no-alerts");
+      const icon = makeEl("span", "weather-no-alerts-icon");
+      icon.innerHTML = alertIconSvg("ok");
+      none.append(icon, document.createTextNode("No weather risks in the 7-day forecast."));
+      block.appendChild(none);
+      return block;
+    }
+
+    alertDays.forEach((group) => {
+      const isToday = group.index === 0;
+      const level = group.alerts.some((a) => a.risk === "high") ? "high" : "moderate";
+      const section = makeEl("div", "alert-day" + (isToday ? " alert-day--today alert-day--" + level : ""));
+      const label = makeEl("div", "alert-day-label");
+      if (isToday) label.appendChild(makeEl("span", "alert-today-pill", "Today"));
+      label.appendChild(document.createTextNode(isToday ? toDateObj(group.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : fullDayLabel(group.date, group.index)));
+      section.appendChild(label);
+
+      const list = makeEl("ul", "alert-list");
+      group.alerts.forEach((a) => {
+        const item = makeEl("li", "alert-item alert-item--" + a.risk);
+        const icon = makeEl("span", "alert-item-icon");
+        icon.innerHTML = alertIconSvg(a.type);
+        const text = makeEl("div", "alert-item-text");
+        const head = makeEl("div", "alert-item-head");
+        head.appendChild(makeEl("strong", "", a.title));
+        head.appendChild(makeEl("span", "alert-risk-tag", a.risk === "high" ? "High risk" : "Moderate risk"));
+        text.append(head, makeEl("div", "alert-item-detail", a.detail));
+        item.append(icon, text);
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+      block.appendChild(section);
+    });
+    return block;
+  }
+
+  function buildWeatherCard(target, entry) {
+    const card = makeEl("article", "weather-card");
+    const head = makeEl("header", "weather-card-head");
+    const title = makeEl("div");
+    title.appendChild(makeEl("h3", "", target.name));
+    if (target.address) title.appendChild(makeEl("p", "weather-address", target.address));
+    head.appendChild(title);
+    card.appendChild(head);
+
+    if (!target.address) {
+      card.appendChild(makeEl("p", "weather-note", "No full address on file for this property. The address comes from the Airtable Properties table."));
+      return card;
+    }
+    if (!entry || (entry.status === "loading" && !entry.data)) {
+      card.appendChild(makeEl("p", "weather-note", "Loading weather…"));
+      return card;
+    }
+    if (entry.status === "error") {
+      card.appendChild(makeEl("p", "weather-note weather-note--error", "Weather is unavailable: " + entry.error + "."));
+      const retry = makeEl("button", "btn btn-secondary", "Try again");
+      retry.type = "button";
+      retry.addEventListener("click", () => {
+        weatherCache.delete(target.address);
+        renderWeather();
+      });
+      card.appendChild(retry);
+      return card;
+    }
+
+    const data = entry.data;
+    const alertDays = alertsByDay(data.days);
+    const todayAlerts = alertDays.find((d) => d.index === 0);
+
+    if (data.geo.approximate) {
+      title.appendChild(makeEl("p", "weather-approx", "Approximate location (ZIP area); the exact address wasn't found."));
+    }
+    if (todayAlerts) {
+      const n = todayAlerts.alerts.length;
+      const high = todayAlerts.alerts.some((a) => a.risk === "high");
+      head.appendChild(makeEl("span", "weather-today-pill weather-today-pill--" + (high ? "high" : "moderate"),
+        n + " alert" + (n === 1 ? "" : "s") + " today"));
+      card.classList.add("weather-card--alert-" + (high ? "high" : "moderate"));
+    }
+
+    card.append(buildWeatherHero(data), buildForecastStrip(data, alertDays), buildAlertsBlock(alertDays));
+    return card;
+  }
+
+  function weatherTargets() {
+    const addressByProperty = new Map();
+    state.rows.forEach((r) => {
+      if (!addressByProperty.get(r.property)) addressByProperty.set(r.property, r.full_address || "");
+    });
+    let names = Array.from(addressByProperty.keys()).sort();
+    if (state.property !== ALL_PROPERTIES) names = names.filter((n) => n === state.property);
+    return names.map((name) => ({ name, address: addressByProperty.get(name) }));
+  }
+
+  function renderWeather() {
+    const grid = document.getElementById("weather-grid");
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    if (!state.rows.some((r) => r.full_address)) {
+      grid.appendChild(makeEl("p", "weather-note weather-note--wide",
+        "Weather needs each property's full address, which comes from the Airtable Properties table. It isn't available in the sample CSV data."));
+      return;
+    }
+
+    weatherTargets().forEach((target) => {
+      if (target.address) ensureWeather(target.address);
+      grid.appendChild(buildWeatherCard(target, target.address ? weatherCache.get(target.address) : null));
     });
   }
 
