@@ -1,10 +1,10 @@
 # Tenant Maintenance Dashboard - Implementation Spec
 
-*Last updated 2026-10-05. This spec describes the app as currently built. What changed from the original brief is listed under "Revision notes" at the end.*
+*Last updated 2026-10-06. This spec describes the app as currently built. What changed from the original brief is listed under "Revision notes" at the end.*
 
 ## Goal and scope
 
-Build a small, polished, **single-page** dashboard for a property manager handling tenant maintenance requests across multiple properties. This is a first project and a demo. Ticket data comes from a live **Airtable** base, with a local CSV as the fallback and as the format for uploads. The interface and sample data are in English; currency is USD. Do not claim a live connection to Zillow, TurboTenant, tenants, or an AI model. The only external services are Airtable (read-only ticket data) and Apify (vendor search, local server only); AI summaries are sample content.
+Build a small, polished, **single-page** dashboard for a property manager handling tenant maintenance requests across multiple properties. This is a first project and a demo. Ticket data comes from a live **Airtable** base, with a local CSV as the fallback and as the format for uploads. The interface and sample data are in English; currency is USD. Do not claim a live connection to Zillow, TurboTenant, tenants, or an AI model. The external services are Airtable (read-only ticket data), Apify (vendor search, local server only), and the keyless public weather services described under Weather & Property Alerts (U.S. Census Geocoder and Open-Meteo); AI summaries are sample content.
 
 Deliver a working responsive app, `maintenance_requests.csv` (fallback data), and `demo_upload_sample.csv` (a file to try Upload CSV with). Use a straightforward web stack with no build step: vanilla HTML, CSS, and JavaScript, with PapaParse (CSV parsing) and Chart.js (charts) loaded from a CDN. `serve.ps1` is a local PowerShell server (no Node or Python needed) that serves the files and hosts the local API for Vendor Research. Credentials:
 
@@ -17,11 +17,12 @@ One page, with these sections in order:
 
 1. Header: **Tenant Maintenance Dashboard** (no subtitle), a small **data source badge** ("Live: Airtable" or "Sample data (CSV)"), one **Property** selector defaulting to **All Properties**, and four actions: **Download demo CSV**, **Upload CSV**, **Vendor Research**, and **+ New Request** (each specified below). Include every unique property from the loaded data in the selector. Changing the property updates every KPI, chart, request count, table, cost summary, and the Vendor Research ticket list. A status banner under the header reports load, upload, and validation messages.
 2. Four KPI cards: **Open Requests**, **Urgent Open Requests**, **Resolved This Month**, **Avg. Resolution Time**.
-3. Two charts: **Requests by Category** (donut) and **Requests by Status** (bar). Both reflect *all* requests for the selected property, independent of the Open/Resolved tab, and show category/status labels and counts. Use a clear legend or directly labeled bars.
-4. **Maintenance Requests** with two tabs, **Open Requests (count)** and **Resolved (count)**. Default to Open. Tabs filter the requests in the table; switching properties preserves the selected tab. Show all matching requests, with no arbitrary top-ten cutoff. Open rows: Date, Property, Issue, Category, Priority, Status, Assigned To. Resolved rows may also show Date Resolved. Clicking a row opens an accessible dialog showing ID, property, tenant, original issue, category, priority, status, assignee, created/resolved dates if present, actual cost if present, and AI Summary. A blank assignee or cost displays `-` or `Not recorded`, never `$0` by default. For **New** and **In Progress** tickets only, the dialog also shows a **Vendor Research** button (see Vendor Research).
-5. **Maintenance Costs Year to Date by Property**: a compact table listing each property and its total actual maintenance cost for the year to date. When All Properties is selected, list every property in the data sorted by cost descending and show a clearly labeled portfolio total. When a property is selected, show only that property's row and its total. This section does not change with the Open/Resolved tab. Show `$0` only when there are no recorded costs for a property in the date range.
+3. **Weather & Property Alerts**: one compact weather card per property (see Weather & Property Alerts).
+4. Two charts: **Requests by Category** (donut) and **Requests by Status** (bar). Both reflect *all* requests for the selected property, independent of the Open/Resolved tab, and show category/status labels and counts. Use a clear legend or directly labeled bars.
+5. **Maintenance Requests** with two tabs, **Open Requests (count)** and **Resolved (count)**. Default to Open. Tabs filter the requests in the table; switching properties preserves the selected tab. Show all matching requests, with no arbitrary top-ten cutoff. Open rows: Date, Property, Issue, Category, Priority, Status, Assigned To. Resolved rows may also show Date Resolved. Clicking a row opens an accessible dialog showing ID, property, tenant, original issue, category, priority, status, assignee, created/resolved dates if present, actual cost if present, and AI Summary. A blank assignee or cost displays `-` or `Not recorded`, never `$0` by default. For **New** and **In Progress** tickets only, the dialog also shows a **Vendor Research** button (see Vendor Research).
+6. **Maintenance Costs Year to Date by Property**: a compact table listing each property and its total actual maintenance cost for the year to date. When All Properties is selected, list every property in the data sorted by cost descending and show a clearly labeled portfolio total. When a property is selected, show only that property's row and its total. This section does not change with the Open/Resolved tab. Show `$0` only when there are no recorded costs for a property in the date range.
 
-The **Vendor Research** header button switches the page to a second view in place of sections 2-5 (the header and status banner stay); its label changes to **← Back to Dashboard** while that view is open. It is a view inside the same page, not a separate URL.
+The **Vendor Research** header button switches the page to a second view in place of sections 2-6 (the header and status banner stay); its label changes to **← Back to Dashboard** while that view is open. It is a view inside the same page, not a separate URL.
 
 No sidebar, search box, or extra filters, and no ticket edit workflow. Include helpful empty states if a selected property has no requests in a tab or no resolved requests this month.
 
@@ -49,6 +50,27 @@ A view for finding local vendors for an open ticket.
   3. Show up to 5 vendors, each with name, category, rating (for example `4.8 / 5`), review count, phone, website link, and a Google Maps link. A missing value displays `-`. External links open in a new tab.
 - **States:** a searching message that names the term and address; a no-results message; and plain error messages (for example when Apify reports a failure). A ticket with no full address cannot be searched and says why.
 - **Local only:** the search runs through `serve.ps1`, which holds `APIFY_TOKEN`. On the public GitHub Pages site, or a page opened as a file, the view still opens but shows a notice and keeps **Find Vendors** disabled. `serve.ps1` never serves dotfiles such as `.env` and accepts searches only from the page it serves.
+
+### Weather & Property Alerts
+
+A compact section between the KPI cards and the charts showing current weather, a 7-day forecast, and maintenance alerts for each property. It follows the Property selector (All Properties shows every property; a selected property shows only its card) and is hidden in the Vendor Research view. It uses real current dates, not the as-of date.
+
+- **Card layout:** desktop shows all four property cards side by side in one row; two columns on tablets (up to 1180px), one column on phones (up to 700px). Cards are kept short (about 306px tall with no alerts). Each card has, top to bottom: property name and city/state/ZIP (marked "approx. location" when the location is approximate); the **condition image**; the **7-day forecast**; and the **alerts** block.
+- **Condition image:** a sky image matching the current condition (clear, partly cloudy, overcast, fog, drizzle, rain, heavy rain, freezing rain, snow, thunderstorm; day or night variants) with the **current temperature** and **condition text overlaid** on it, plus two small chips: **wind** (speed, compass direction, and a direction arrow) and **chance of rain** for today. A darker gradient on the text side keeps the overlay readable. The images are generated in the browser (canvas) and cached per condition, so there are no image files, downloads, or licensing. If generation fails the card falls back to a plain blue background and stays readable. Sunrise/sunset, feels-like, humidity, and gusts are intentionally not shown.
+- **7-day forecast:** one borderless row of seven columns (day name, small condition icon, high, low) with no box around each day. Today is underlined in the accent color. A small dot under a day marks an alert (red for high risk, orange for moderate).
+- **Maintenance alerts (7-day risk logic):** simple rules over the daily forecast, not official warnings:
+
+  | Alert | Moderate risk | High risk |
+  | --- | --- | --- |
+  | Freezing temperatures / hard freeze | low at or below 32°F | low at or below 20°F |
+  | Heavy rain | 1 in or more in a day | 2 in or more |
+  | Snow | 1 in or more | 4 in or more |
+  | Strong winds | gusts of 40 mph or more | 58 mph or more |
+  | Extreme heat | high of 90°F or more | 100°F or more |
+
+  Alerts today appear in a prominent panel (red for high, orange for moderate) with the alert name, the metric (for example "Low 14°F" or "Gusts 45 mph"), and a one-line maintenance suggestion, and the card gets a matching ring and an "N alerts today" pill. Alerts on later days appear as one compact line per day. With no risks, the card shows "No weather risks in the next 7 days".
+- **Data:** the property's `full_address` is located with the **U.S. Census Geocoder** (JSONP, because it sends no CORS headers); exact matches are cached in `localStorage`. If the Census has no match, the card falls back to the address's ZIP area and says the location is approximate. The forecast comes from **Open-Meteo** (free, non-commercial, no key) and is cached in memory for 15 minutes. A credit line under the cards attributes Open-Meteo (CC BY 4.0) and the Census Geocoder and states that alerts are not official warnings.
+- **States:** a loading state per card; a plain error with a **Try again** button when a lookup fails; a notice instead of cards when the data has no addresses (CSV and uploads); a notice for a property with no address.
 
 ## Data definitions and calculations
 
@@ -118,11 +140,12 @@ Use a clean modern property-management SaaS style: near-white page background, w
 
 - **Priority badges:** red/pink Urgent, orange High, yellow Medium, green Low, each with a matching border so the three warm levels stay distinguishable. Badge text keeps at least 4.5:1 contrast. Status badges: gray New, pale indigo Scheduled, orange In Progress, green Resolved.
 - **Chart colors:** soft pastels. The category donut uses six distinct pastels (blue, mint, yellow, lavender, pink, peach). The status bar chart uses its own four pastels (gray New, blue Scheduled, orange In Progress, mint Resolved), kept distinct from each other and a shade paler or hue-shifted from the donut's closest colors. Legend swatches use the same colors as the charts, and labels never depend on color alone.
+- **Weather cards:** same white cards, border, radius, and shadow as the rest of the dashboard. The condition image is the one colorful, photographic element and is rounded to match; alert colors reuse the Urgent (red) and High (orange) palette, and the no-alert message uses the Low (green) palette.
 - The data source badge is green for "Live: Airtable" and gray for "Sample data (CSV)".
 
 ## Desktop, phone, and accessibility
 
-- Desktop: aligned header/selector, four KPI cards in a row when space permits, charts side by side, full table below, cost summary below it. Vendor Research shows the ticket list beside the selected ticket's details and results.
+- Desktop: aligned header/selector, four KPI cards in a row when space permits, the four weather cards in one row, charts side by side, full table below, cost summary below it. Vendor Research shows the ticket list beside the selected ticket's details and results.
 - Phone: no horizontal page overflow; stack KPI cards and charts, keep the property selector and tabs usable with touch, and render each request as a compact card with its key fields rather than squeezing a seven-column table. Render the cost summary as a stacked list or responsive table. Dialogs fit the viewport, scroll internally if needed, and have a visible close button. Vendor Research stacks into one column.
 - Provide visible keyboard focus, proper button/selector labels, adequate contrast, chart labels that do not depend on color alone, keyboard-operable tabs and dialogs, Escape to close dialogs, and sensible focus return after closing. Focus trapping skips hidden controls. Vendor Research ticket entries are buttons that report their selected state, and search progress is announced through a status region.
 
@@ -137,6 +160,7 @@ Use a clean modern property-management SaaS style: near-white page background, w
 - Upload CSV: the demo file loads all 36 rows; an invalid file keeps the current data and shows an error. + New Request: a valid request appears in the lists and updates KPIs, charts, and costs; invalid input shows an inline error; nothing is persisted.
 - Vendor Research: only open tickets are listed; the dialog button appears only for New and In Progress tickets and opens the view with that ticket selected; selecting a ticket shows its issue and full address; no Apify request is made until Find Vendors is clicked; results show up to 5 vendors with all seven fields; on a non-local page the notice appears and the button is disabled.
 - `APIFY_TOKEN` appears in no tracked file or served page; `.env` is gitignored and `serve.ps1` does not serve it.
+- Weather & Property Alerts: with live data, one card per property appears between the KPIs and the charts (four in one row on desktop, one column on phones) and follows the Property selector; each card shows the condition image with temperature and conditions overlaid, wind and chance of rain, a borderless 7-day strip, and alerts (today's highlighted); no sunrise/sunset, feels-like, humidity, or gusts are shown; the section shows a notice for CSV data without addresses and is hidden in Vendor Research; no API key appears in any tracked file.
 - At common desktop and phone widths, all controls remain usable and the page has no horizontal overflow.
 
 ## Revision notes
@@ -147,5 +171,6 @@ Approved changes since the original brief:
 - Ticket data now comes from Airtable (read-only token), with the CSV as fallback, replacing "local CSV as the sole data source". The Property field became a linked record to a Properties table; the `Full Address` lookup is kept on every row for vendor search.
 - Added Upload CSV, the 36-row demo CSV, and a working + New Request form. The original brief excluded a New Request button; this replaces that exclusion.
 - Added the Vendor Research view (Apify Google Maps Scraper through the local server) and its button in the ticket details dialog.
+- Added the Weather & Property Alerts section (Census Geocoder and Open-Meteo, no keys): a compact four-across row of property cards, each with a generated condition image with the temperature and conditions overlaid, wind and chance of rain, a borderless 7-day forecast, and rule-based maintenance alerts. Sunrise/sunset, feels-like, humidity, and gusts were deliberately left out.
 - Chart colors changed to soft pastels, and priority badges changed to red/pink, orange, and yellow with borders (previously red, orange, amber).
 - The as-of date (`2026-09-23`), the KPI and cost definitions, the CSV format, and the accessibility requirements are unchanged.
