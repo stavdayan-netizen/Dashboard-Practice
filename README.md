@@ -82,7 +82,13 @@ Notes:
 
 ## Weather & Property Alerts
 
-Between the KPI cards and the charts, a **Weather & Property Alerts** section shows one card per property (just the selected property when the Property filter is set). Each card has today's weather with an illustration, a 7-day forecast strip, and maintenance alerts for the next 7 days, grouped by day, with today's alerts highlighted. A card with alerts today gets a red (high risk) or orange (moderate) ring.
+Between the KPI cards and the charts, a **Weather & Property Alerts** section shows one compact card per property (just the selected property when the Property filter is set). On desktop all four cards sit side by side in one row; they drop to two columns on tablets and one on phones. Each card has:
+
+- a sky image that matches the current condition (clear, partly cloudy, cloudy, fog, drizzle, rain, snow, thunderstorm, day or night) with the temperature and condition written over it, plus wind and chance of rain;
+- a borderless 7-day strip (day, small icon, high/low) with a dot under any day that has an alert;
+- maintenance alerts for the next 7 days: today's alerts in a highlighted panel, later days as one short line each. A card with alerts today gets a red (high risk) or orange (moderate) ring.
+
+The sky images are generated in the browser (canvas), so there are no image files, downloads or licensing to worry about.
 
 How it works (all in `app.js`, no API keys, and it works on the public GitHub Pages site too):
 

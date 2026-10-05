@@ -1155,12 +1155,6 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     return { label: entry[0], kind: entry[1], night: isDay === 0 };
   }
 
-  function weatherThemeFor(info) {
-    if (info.kind === "clear" || info.kind === "partly") return info.night ? "night" : "sunny";
-    if (info.kind === "drizzle" || info.kind === "rain" || info.kind === "heavy-rain" || info.kind === "freezing-rain") return "rain";
-    return info.kind; // cloudy, fog, snow, thunder
-  }
-
   // -- Illustrations (static SVG strings; no user data is ever put in them) --
 
   const CLOUD_PATH = "M26 56 C12 56 4 47 4 37 C4 27 12 20 22 19 C25 8 35 1 47 1 C59 1 68 7 72 17 C85 17 96 26 96 38 C96 48 88 56 76 56 Z";
@@ -1263,37 +1257,44 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
   // -- Maintenance alert rules (units: °F, inches, mph) --
 
+  // Each alert: type, risk ("moderate" | "high"), title, a short metric for compact
+  // display, and one line of advice.
   function alertsForDay(day) {
     const out = [];
     if (day.low <= 32) {
       const hard = day.low <= 20;
       out.push({
-        type: "freeze", risk: hard ? "high" : "moderate", title: hard ? "Hard freeze" : "Freezing temperatures",
-        detail: "Low " + Math.round(day.low) + "°F. Protect exposed pipes and outdoor spigots, and confirm heat is working."
+        type: "freeze", risk: hard ? "high" : "moderate", title: hard ? "Hard freeze" : "Freezing temps",
+        metric: "Low " + Math.round(day.low) + "°F",
+        advice: "Protect exposed pipes and outdoor spigots; confirm heat is working."
       });
     }
     if (day.rain >= 1) {
       out.push({
         type: "rain", risk: day.rain >= 2 ? "high" : "moderate", title: "Heavy rain",
-        detail: "About " + day.rain.toFixed(1) + " in of rain. Check gutters, drains, sump pumps, and basements."
+        metric: day.rain.toFixed(1) + " in",
+        advice: "Check gutters, drains, sump pumps, and basements."
       });
     }
     if (day.snow >= 1) {
       out.push({
         type: "snow", risk: day.snow >= 4 ? "high" : "moderate", title: "Snow",
-        detail: "About " + day.snow.toFixed(1) + " in of snow. Plan plowing and salting, and check walkways and roof load."
+        metric: day.snow.toFixed(1) + " in",
+        advice: "Plan plowing and salting; check walkways and roof load."
       });
     }
     if (day.gust >= 40) {
       out.push({
         type: "wind", risk: day.gust >= 58 ? "high" : "moderate", title: "Strong winds",
-        detail: "Gusts up to " + Math.round(day.gust) + " mph. Secure loose items; watch roofs, fences, and trees."
+        metric: "Gusts " + Math.round(day.gust) + " mph",
+        advice: "Secure loose items; watch roofs, fences, and trees."
       });
     }
     if (day.high >= 90) {
       out.push({
         type: "heat", risk: day.high >= 100 ? "high" : "moderate", title: "Extreme heat",
-        detail: "High " + Math.round(day.high) + "°F. Expect heavy AC demand; check cooling systems."
+        metric: "High " + Math.round(day.high) + "°F",
+        advice: "Expect heavy AC demand; check cooling systems."
       });
     }
     return out;
@@ -1377,8 +1378,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     const params = new URLSearchParams({
       latitude: lat, longitude: lon, timezone: "auto", forecast_days: "7",
       temperature_unit: "fahrenheit", wind_speed_unit: "mph", precipitation_unit: "inch",
-      current: "temperature_2m,apparent_temperature,relative_humidity_2m,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum,wind_gusts_10m_max,sunrise,sunset"
+      current: "temperature_2m,is_day,weather_code,wind_speed_10m,wind_direction_10m",
+      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum,wind_gusts_10m_max"
     });
     const res = await fetch("https://api.open-meteo.com/v1/forecast?" + params.toString());
     if (!res.ok) throw new Error("The weather service returned an error (HTTP " + res.status + ")");
@@ -1389,13 +1390,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     return {
       current: {
         temp: raw.current.temperature_2m,
-        feels: raw.current.apparent_temperature,
-        humidity: raw.current.relative_humidity_2m,
         isDay: raw.current.is_day,
         code: raw.current.weather_code,
         wind: raw.current.wind_speed_10m,
-        windDir: raw.current.wind_direction_10m,
-        gust: raw.current.wind_gusts_10m
+        windDir: raw.current.wind_direction_10m
       },
       days: d.time.map((date, i) => ({
         date,
@@ -1405,9 +1403,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
         rainChance: num(d.precipitation_probability_max[i], 0),
         rain: num(d.rain_sum[i], 0) + num(d.showers_sum[i], 0),
         snow: num(d.snowfall_sum[i], 0),
-        gust: num(d.wind_gusts_10m_max[i], 0),
-        sunrise: d.sunrise[i],
-        sunset: d.sunset[i]
+        gust: num(d.wind_gusts_10m_max[i], 0)
       }))
     };
   }
@@ -1450,65 +1446,293 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
   const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
 
-  function formatClock(iso) {
-    const m = /T(\d{2}):(\d{2})/.exec(String(iso));
-    if (!m) return "-";
-    const hour = Number(m[1]);
-    return ((hour % 12) || 12) + ":" + m[2] + " " + (hour >= 12 ? "PM" : "AM");
+  // -- Condition images --
+  // Photographic-style skies drawn in the browser: fractal-noise clouds with
+  // lighting, sun and moon glow, rain, snow, lightning, and stars. Nothing is
+  // downloaded or stored in the repo, and one image per condition is cached.
+
+  const sceneCache = new Map();
+
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const smoothstep = (e0, e1, x) => {
+    const t = clamp01((x - e0) / (e1 - e0));
+    return t * t * (3 - 2 * t);
+  };
+  const mixRgb = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+  function hash2(ix, iy, seed) {
+    let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(seed, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
   }
+
+  function valueNoise(x, y, seed) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash2(xi, yi, seed), b = hash2(xi + 1, yi, seed);
+    const c = hash2(xi, yi + 1, seed), d = hash2(xi + 1, yi + 1, seed);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+
+  function fbm(x, y, octaves, seed) {
+    let sum = 0, amp = 0.5, freq = 1, norm = 0;
+    for (let i = 0; i < octaves; i++) {
+      sum += amp * valueNoise(x * freq, y * freq, seed + i * 17);
+      norm += amp;
+      amp *= 0.5;
+      freq *= 2.03;
+    }
+    return sum / norm;
+  }
+
+  function seededRandom(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // thr/soft control cloud coverage (lower thr = more cloud); colors are RGB.
+  const DAY_SKY = { top: [26, 98, 190], bottom: [170, 214, 247] };
+  const SCENE_DEFS = {
+    "clear": Object.assign({ seed: 11, sun: { x: 0.82, y: 0.3, r: 0.05, glow: 0.8 }, haze: [214, 232, 250, 0.35],
+      cloud: { thr: 0.67, soft: 0.14, scale: 3.4, light: [255, 255, 255], shadow: [188, 204, 226], opacity: 0.9, fadeBottom: true } }, DAY_SKY),
+    "partly": Object.assign({ seed: 23, sun: { x: 0.82, y: 0.3, r: 0.05, glow: 0.8 }, haze: [214, 232, 250, 0.3],
+      cloud: { thr: 0.43, soft: 0.2, scale: 2.6, light: [255, 255, 255], shadow: [172, 190, 216], opacity: 0.97, fadeBottom: true } }, DAY_SKY),
+    "cloudy": { seed: 31, top: [118, 132, 150], bottom: [190, 200, 212], light: [0.3, -0.9],
+      cloud: { thr: 0.3, soft: 0.28, scale: 3.2, light: [228, 233, 240], shadow: [102, 114, 132], opacity: 1 } },
+    "fog": { seed: 41, top: [176, 184, 192], bottom: [222, 226, 229], haze: [226, 229, 232, 0.7], light: [0.3, -0.9],
+      cloud: { thr: 0.42, soft: 0.3, scale: 2.2, light: [238, 240, 242], shadow: [190, 196, 202], opacity: 0.55 } },
+    "drizzle": { seed: 51, top: [92, 104, 122], bottom: [160, 170, 184], haze: [180, 188, 198, 0.35], light: [0.3, -0.9],
+      cloud: { thr: 0.26, soft: 0.28, scale: 3, light: [170, 178, 192], shadow: [78, 88, 106], opacity: 1 }, rain: { count: 90, tint: "218,228,240", shortDrops: true } },
+    "rain": { seed: 61, top: [64, 76, 96], bottom: [128, 142, 160], haze: [150, 160, 174, 0.35], light: [0.3, -0.9],
+      cloud: { thr: 0.22, soft: 0.3, scale: 3, light: [152, 162, 178], shadow: [56, 64, 82], opacity: 1 }, rain: { count: 190, tint: "220,232,246" } },
+    "heavy-rain": { seed: 71, top: [42, 50, 68], bottom: [96, 108, 126], haze: [110, 120, 136, 0.45], light: [0.3, -0.9],
+      cloud: { thr: 0.18, soft: 0.3, scale: 3, light: [120, 130, 148], shadow: [34, 40, 56], opacity: 1 }, rain: { count: 340, tint: "210,224,242" } },
+    "freezing-rain": { seed: 81, top: [72, 88, 112], bottom: [150, 166, 188], haze: [176, 190, 208, 0.35], light: [0.3, -0.9],
+      cloud: { thr: 0.22, soft: 0.3, scale: 3, light: [168, 182, 202], shadow: [66, 78, 100], opacity: 1 }, rain: { count: 150, tint: "214,232,252" }, sparkle: 60 },
+    "snow": { seed: 91, top: [126, 142, 162], bottom: [208, 218, 230], haze: [226, 232, 240, 0.5], light: [0.3, -0.9],
+      cloud: { thr: 0.28, soft: 0.3, scale: 3, light: [238, 242, 247], shadow: [138, 152, 170], opacity: 1 }, snow: { count: 190 } },
+    "thunder": { seed: 101, top: [34, 36, 58], bottom: [92, 88, 116], haze: [104, 98, 128, 0.35], light: [0.3, -0.9],
+      cloud: { thr: 0.2, soft: 0.3, scale: 2.8, light: [134, 126, 162], shadow: [24, 24, 42], opacity: 1 }, rain: { count: 200, tint: "200,208,240" }, lightning: true },
+    "clear-night": { seed: 111, top: [6, 14, 42], bottom: [38, 60, 112], haze: [58, 84, 140, 0.25],
+      moon: { x: 0.82, y: 0.3, r: 0.05, glow: 0.7 }, stars: 150 },
+    "partly-night": { seed: 121, top: [6, 14, 42], bottom: [38, 60, 112], haze: [58, 84, 140, 0.2],
+      moon: { x: 0.82, y: 0.3, r: 0.05, glow: 0.7 }, stars: 70,
+      cloud: { thr: 0.46, soft: 0.24, scale: 3.4, light: [150, 170, 206], shadow: [22, 34, 64], opacity: 0.95, fadeBottom: true } }
+  };
+
+  function renderWeatherScene(def, night) {
+    const W = 440, H = 220;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+
+    const image = ctx.createImageData(W, H);
+    const px = image.data;
+    const aspect = W / H;
+    const cl = def.cloud;
+    const seed = def.seed;
+    const lightSource = def.sun || def.moon;
+    const light = def.light || (lightSource ? [0.55, -0.6] : [0.3, -0.9]);
+
+    for (let y = 0; y < H; y++) {
+      const ty = y / H;
+      const sky = mixRgb(def.top, def.bottom, Math.pow(ty, 0.8));
+      for (let x = 0; x < W; x++) {
+        const tx = x / W;
+        let r = sky[0], g = sky[1], b = sky[2];
+
+        if (def.sun) {
+          const dx = (tx - def.sun.x) * aspect, dy = ty - def.sun.y;
+          const d2 = dx * dx + dy * dy;
+          const glow = Math.exp(-d2 / 0.045) * def.sun.glow + Math.exp(-d2 / 0.5) * 0.18;
+          r += 255 * glow; g += 238 * glow; b += 200 * glow;
+          const core = 1 - smoothstep(def.sun.r * 0.8, def.sun.r, Math.sqrt(d2));
+          r += (255 - r) * core; g += (252 - g) * core; b += (240 - b) * core;
+        }
+        if (def.moon) {
+          const dx = (tx - def.moon.x) * aspect, dy = ty - def.moon.y;
+          const d2 = dx * dx + dy * dy;
+          const glow = Math.exp(-d2 / 0.02) * def.moon.glow;
+          r += 170 * glow; g += 190 * glow; b += 235 * glow;
+          const core = 1 - smoothstep(def.moon.r * 0.92, def.moon.r, Math.sqrt(d2));
+          if (core > 0) {
+            const tex = 0.84 + 0.16 * fbm(tx * 34, ty * 34, 3, 91);
+            r += (240 * tex - r) * core; g += (238 * tex - g) * core; b += (226 * tex - b) * core;
+          }
+        }
+        if (cl) {
+          const nx = tx * cl.scale * aspect, ny = ty * cl.scale;
+          const warp = fbm(nx * 0.55 + 11.3, ny * 0.55 + 4.1, 3, seed + 3);
+          const qx = nx + warp * 1.3, qy = ny + warp * 1.3;
+          const dens = fbm(qx, qy, 6, seed);
+          const a0 = smoothstep(cl.thr, cl.thr + cl.soft, dens);
+          if (a0 > 0.003) {
+            const dens2 = fbm(qx + light[0] * 0.07, qy + light[1] * 0.07, 6, seed);
+            const lit = clamp01(0.6 + (dens - dens2) * 9);
+            const body = smoothstep(cl.thr, cl.thr + 0.3, dens);
+            const col = mixRgb(cl.light, cl.shadow, (1 - lit) * (0.25 + 0.75 * body));
+            const a = a0 * cl.opacity * (cl.fadeBottom ? 1 - 0.65 * smoothstep(0.78, 1, ty) : 1);
+            r += (col[0] - r) * a; g += (col[1] - g) * a; b += (col[2] - b) * a;
+          }
+        }
+        if (def.haze) {
+          const hz = def.haze[3] * Math.pow(ty, 1.6);
+          r += (def.haze[0] - r) * hz; g += (def.haze[1] - g) * hz; b += (def.haze[2] - b) * hz;
+        }
+        const i = (y * W + x) * 4;
+        px[i] = r > 255 ? 255 : r < 0 ? 0 : r;
+        px[i + 1] = g > 255 ? 255 : g < 0 ? 0 : g;
+        px[i + 2] = b > 255 ? 255 : b < 0 ? 0 : b;
+        px[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+
+    const rand = seededRandom(seed * 7919);
+
+    if (def.stars) {
+      for (let i = 0; i < def.stars; i++) {
+        const sx = rand() * W, sy = rand() * H * 0.78, br = Math.pow(rand(), 3);
+        ctx.fillStyle = "rgba(255,255,255," + (0.25 + br * 0.75).toFixed(2) + ")";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.5 + br * 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (def.rain) {
+      ctx.lineCap = "round";
+      for (let i = 0; i < def.rain.count; i++) {
+        const depth = rand();
+        const len = (def.rain.shortDrops ? 4 : 7) + depth * (def.rain.shortDrops ? 9 : 22);
+        const sx = rand() * (W + 40), sy = rand() * H;
+        ctx.strokeStyle = "rgba(" + def.rain.tint + "," + (0.12 + depth * 0.42).toFixed(2) + ")";
+        ctx.lineWidth = 0.6 + depth * 1.1;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - len * 0.22, sy + len);
+        ctx.stroke();
+      }
+    }
+    if (def.snow) {
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < def.snow.count; i++) {
+        const depth = rand();
+        ctx.globalAlpha = 0.35 + depth * 0.55;
+        ctx.shadowColor = "rgba(255,255,255,0.9)";
+        ctx.shadowBlur = depth > 0.7 ? 4 : 0;
+        ctx.beginPath();
+        ctx.arc(rand() * W, rand() * H, 0.8 + depth * 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+    if (def.sparkle) {
+      ctx.fillStyle = "rgba(235,248,255,0.85)";
+      for (let i = 0; i < def.sparkle; i++) {
+        ctx.beginPath();
+        ctx.arc(rand() * W, rand() * H, 0.7 + rand() * 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (def.lightning) {
+      let lx = W * (0.55 + rand() * 0.2), ly = 0;
+      const pts = [[lx, ly]];
+      while (ly < H * 0.78) {
+        ly += 10 + rand() * 16;
+        lx += (rand() - 0.5) * 26;
+        pts.push([lx, ly]);
+      }
+      const stroke = (width, style, blur) => {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = style;
+        ctx.shadowColor = "rgba(190,175,255,0.9)";
+        ctx.shadowBlur = blur;
+        ctx.beginPath();
+        pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.stroke();
+      };
+      stroke(5, "rgba(170,160,255,0.35)", 18);
+      stroke(1.8, "rgba(255,255,255,0.95)", 8);
+      ctx.shadowBlur = 0;
+      const flash = ctx.createRadialGradient(pts[0][0], 0, 4, pts[0][0], H * 0.3, W * 0.5);
+      flash.addColorStop(0, "rgba(210,200,255,0.28)");
+      flash.addColorStop(1, "rgba(210,200,255,0)");
+      ctx.fillStyle = flash;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (night && !def.moon) {
+      ctx.fillStyle = "rgba(8,14,34,0.42)";
+      ctx.fillRect(0, 0, W, H);
+    }
+    return canvas.toDataURL("image/jpeg", 0.86);
+  }
+
+  function weatherSceneUrl(info) {
+    const base = info.night && (info.kind === "clear" || info.kind === "partly") ? info.kind + "-night" : info.kind;
+    const key = base + (info.night ? ":n" : ":d");
+    if (!sceneCache.has(key)) {
+      let url = "";
+      try {
+        url = renderWeatherScene(SCENE_DEFS[base] || SCENE_DEFS.cloudy, info.night);
+      } catch (err) {
+        url = ""; // the card still works with its plain gradient background
+      }
+      sceneCache.set(key, url);
+    }
+    return sceneCache.get(key);
+  }
+
+  // -- Card pieces --
 
   function dayLabel(date, index) {
     if (index === 0) return "Today";
     return toDateObj(date).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
   }
 
-  function fullDayLabel(date, index) {
-    const text = toDateObj(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-    if (index === 0) return "Today · " + text;
-    if (index === 1) return "Tomorrow · " + text;
-    return text;
+  function shortDate(date) {
+    return toDateObj(date).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }) + " " + toDateObj(date).getUTCDate();
   }
 
-  function weatherStat(label, value, extraNode) {
-    const li = makeEl("li", "weather-stat");
-    li.appendChild(makeEl("span", "weather-stat-label", label));
-    const val = makeEl("span", "weather-stat-value");
-    if (extraNode) val.appendChild(extraNode);
-    val.appendChild(document.createTextNode(value));
-    li.appendChild(val);
+  function weatherChip(label, value, extraNode) {
+    const li = makeEl("li", "weather-chip");
+    li.appendChild(makeEl("span", "weather-chip-label", label));
+    if (extraNode) li.appendChild(extraNode);
+    li.appendChild(makeEl("span", "weather-chip-value", value));
     return li;
   }
 
-  function buildWeatherHero(data) {
+  // Current temperature and conditions overlaid on the condition image.
+  function buildWeatherPhoto(data) {
     const cur = data.current;
-    const today = data.days[0];
     const info = describeWeather(cur.code, cur.isDay);
 
-    const hero = makeEl("div", "weather-hero weather-theme-" + weatherThemeFor(info));
-    const main = makeEl("div", "weather-hero-main");
+    const photo = makeEl("div", "weather-photo");
+    const url = weatherSceneUrl(info);
+    if (url) photo.style.backgroundImage = 'url("' + url + '")';
+
+    const main = makeEl("div", "weather-photo-main");
     main.appendChild(makeEl("div", "weather-temp", Math.round(cur.temp) + "°"));
     main.appendChild(makeEl("div", "weather-condition", info.label));
-    main.appendChild(makeEl("div", "weather-range",
-      "Feels like " + Math.round(cur.feels) + "° · H " + Math.round(today.high) + "° / L " + Math.round(today.low) + "°"));
 
-    const art = makeEl("div", "weather-art");
-    art.setAttribute("aria-hidden", "true");
-    art.innerHTML = weatherIconSvg(info.kind, info.night);
-
-    const arrow = makeEl("span", "weather-wind-arrow");
+    const arrow = makeEl("span", "weather-wind-arrow", "↑");
     arrow.setAttribute("aria-hidden", "true");
     arrow.style.transform = "rotate(" + (Math.round(cur.windDir) + 180) + "deg)";
-    arrow.textContent = "↑";
 
-    const stats = makeEl("ul", "weather-stats");
-    stats.appendChild(weatherStat("Wind", Math.round(cur.wind) + " mph " + COMPASS[Math.round(cur.windDir / 22.5) % 16], arrow));
-    stats.appendChild(weatherStat("Gusts", Math.round(cur.gust) + " mph"));
-    stats.appendChild(weatherStat("Humidity", Math.round(cur.humidity) + "%"));
-    stats.appendChild(weatherStat("Rain chance", Math.round(today.rainChance) + "%"));
-    stats.appendChild(weatherStat("Sunrise / sunset", formatClock(today.sunrise) + " / " + formatClock(today.sunset)));
+    const chips = makeEl("ul", "weather-chips");
+    chips.appendChild(weatherChip("Wind", Math.round(cur.wind) + " mph " + COMPASS[Math.round(cur.windDir / 22.5) % 16], arrow));
+    chips.appendChild(weatherChip("Rain", Math.round(data.days[0].rainChance) + "%"));
 
-    hero.append(main, art, stats);
-    return hero;
+    photo.append(main, chips);
+    return photo;
   }
 
   function buildForecastStrip(data, alertDays) {
@@ -1542,58 +1766,104 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     return list;
   }
 
+  function alertIconNode(type) {
+    const icon = makeEl("span", "alert-icon");
+    icon.innerHTML = alertIconSvg(type);
+    return icon;
+  }
+
+  // Today's alerts: a filled, high-contrast panel so they stand out immediately.
+  function buildTodayAlerts(group) {
+    const level = group.alerts.some((a) => a.risk === "high") ? "high" : "moderate";
+    const panel = makeEl("div", "alert-today alert-today--" + level);
+    const label = makeEl("div", "alert-today-label");
+    label.appendChild(makeEl("span", "alert-today-pill", "Today"));
+    label.appendChild(document.createTextNode(toDateObj(group.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })));
+    panel.appendChild(label);
+
+    group.alerts.forEach((a) => {
+      const row = makeEl("div", "alert-today-item alert-today-item--" + a.risk);
+      const text = makeEl("div", "alert-today-text");
+      const head = makeEl("div", "alert-today-head");
+      head.appendChild(makeEl("strong", "", a.title));
+      head.appendChild(makeEl("span", "alert-metric", a.metric));
+      head.appendChild(makeEl("span", "alert-risk-tag", a.risk === "high" ? "High risk" : "Moderate"));
+      text.append(head, makeEl("div", "alert-advice", a.advice));
+      row.append(alertIconNode(a.type), text);
+      panel.appendChild(row);
+    });
+    return panel;
+  }
+
+  // Later days: one compact line per day.
+  function buildUpcomingAlerts(groups) {
+    const list = makeEl("ul", "alert-upcoming");
+    groups.forEach((group) => {
+      const li = makeEl("li", "alert-upcoming-day");
+      li.appendChild(makeEl("span", "alert-upcoming-name", shortDate(group.date)));
+      const chips = makeEl("span", "alert-chips");
+      group.alerts.forEach((a) => {
+        const chip = makeEl("span", "alert-chip alert-chip--" + a.risk);
+        chip.title = a.advice + " (" + (a.risk === "high" ? "high" : "moderate") + " risk)";
+        chip.append(alertIconNode(a.type), document.createTextNode(a.title + " · " + a.metric));
+        chip.appendChild(makeEl("span", "visually-hidden", ". " + a.advice));
+        chips.appendChild(chip);
+      });
+      li.appendChild(chips);
+      list.appendChild(li);
+    });
+    return list;
+  }
+
   function buildAlertsBlock(alertDays) {
     const block = makeEl("div", "weather-alerts");
-    block.appendChild(makeEl("h4", "weather-alerts-title", "Maintenance alerts · next 7 days"));
+    block.setAttribute("role", "group");
+    block.setAttribute("aria-label", "Maintenance alerts for the next 7 days");
 
     if (alertDays.length === 0) {
       const none = makeEl("p", "weather-no-alerts");
       const icon = makeEl("span", "weather-no-alerts-icon");
       icon.innerHTML = alertIconSvg("ok");
-      none.append(icon, document.createTextNode("No weather risks in the 7-day forecast."));
+      none.append(icon, document.createTextNode("No weather risks in the next 7 days"));
       block.appendChild(none);
       return block;
     }
 
-    alertDays.forEach((group) => {
-      const isToday = group.index === 0;
-      const level = group.alerts.some((a) => a.risk === "high") ? "high" : "moderate";
-      const section = makeEl("div", "alert-day" + (isToday ? " alert-day--today alert-day--" + level : ""));
-      const label = makeEl("div", "alert-day-label");
-      if (isToday) label.appendChild(makeEl("span", "alert-today-pill", "Today"));
-      label.appendChild(document.createTextNode(isToday ? toDateObj(group.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : fullDayLabel(group.date, group.index)));
-      section.appendChild(label);
-
-      const list = makeEl("ul", "alert-list");
-      group.alerts.forEach((a) => {
-        const item = makeEl("li", "alert-item alert-item--" + a.risk);
-        const icon = makeEl("span", "alert-item-icon");
-        icon.innerHTML = alertIconSvg(a.type);
-        const text = makeEl("div", "alert-item-text");
-        const head = makeEl("div", "alert-item-head");
-        head.appendChild(makeEl("strong", "", a.title));
-        head.appendChild(makeEl("span", "alert-risk-tag", a.risk === "high" ? "High risk" : "Moderate risk"));
-        text.append(head, makeEl("div", "alert-item-detail", a.detail));
-        item.append(icon, text);
-        list.appendChild(item);
-      });
-      section.appendChild(list);
-      block.appendChild(section);
-    });
+    const today = alertDays.find((d) => d.index === 0);
+    if (today) block.appendChild(buildTodayAlerts(today));
+    const later = alertDays.filter((d) => d.index !== 0);
+    if (later.length > 0) {
+      block.appendChild(makeEl("div", "weather-alerts-title", today ? "Also coming up" : "Upcoming alerts"));
+      block.appendChild(buildUpcomingAlerts(later));
+    }
     return block;
+  }
+
+  // "10 Harbor View, Holtwood, PA 17532" under a card titled "10 Harbor View" shows just "Holtwood, PA 17532".
+  function weatherPlaceLine(target) {
+    const parts = (target.address || "").split(",");
+    if (parts.length > 1 && parts[0].trim().toLowerCase() === target.name.trim().toLowerCase()) {
+      return parts.slice(1).join(",").trim();
+    }
+    return target.address;
   }
 
   function buildWeatherCard(target, entry) {
     const card = makeEl("article", "weather-card");
     const head = makeEl("header", "weather-card-head");
-    const title = makeEl("div");
+    const title = makeEl("div", "weather-card-title");
     title.appendChild(makeEl("h3", "", target.name));
-    if (target.address) title.appendChild(makeEl("p", "weather-address", target.address));
+    let place = null;
+    if (target.address) {
+      place = makeEl("p", "weather-place", weatherPlaceLine(target));
+      place.title = target.address;
+      title.appendChild(place);
+    }
     head.appendChild(title);
     card.appendChild(head);
 
     if (!target.address) {
-      card.appendChild(makeEl("p", "weather-note", "No full address on file for this property. The address comes from the Airtable Properties table."));
+      card.appendChild(makeEl("p", "weather-note", "No full address on file. It comes from the Airtable Properties table."));
       return card;
     }
     if (!entry || (entry.status === "loading" && !entry.data)) {
@@ -1616,8 +1886,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     const alertDays = alertsByDay(data.days);
     const todayAlerts = alertDays.find((d) => d.index === 0);
 
-    if (data.geo.approximate) {
-      title.appendChild(makeEl("p", "weather-approx", "Approximate location (ZIP area); the exact address wasn't found."));
+    if (data.geo.approximate && place) {
+      const approx = makeEl("span", "weather-approx", " · approx. location");
+      approx.title = "The exact address wasn't found, so this uses the ZIP code's area.";
+      place.appendChild(approx);
     }
     if (todayAlerts) {
       const n = todayAlerts.alerts.length;
@@ -1627,7 +1899,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       card.classList.add("weather-card--alert-" + (high ? "high" : "moderate"));
     }
 
-    card.append(buildWeatherHero(data), buildForecastStrip(data, alertDays), buildAlertsBlock(alertDays));
+    card.append(buildWeatherPhoto(data), buildForecastStrip(data, alertDays), buildAlertsBlock(alertDays));
     return card;
   }
 
