@@ -63,7 +63,7 @@ const AIRTABLE_CONFIG = {
 
 ## Vendor Research
 
-The **Vendor Research** header button opens a second screen that lists only open tickets. Select one to see its issue and full address (from the Airtable `Full Address` lookup), then click **Find Vendors**. Only then does the app:
+The **Vendor Research** header button opens a second screen that lists only open tickets. Each New or In Progress ticket in the Open Requests table (and phone cards) also has its own **Vendor Research** button, which opens this screen with that ticket already selected. Select a ticket to see its issue and full address (from the Airtable `Full Address` lookup), then click **Find Vendors**. Only then does the app:
 
 1. Derive a short search term from the ticket's issue and category (`deriveVendorSearchTerm()` in `app.js`, e.g. "Furnace not producing heat" → "furnace repair").
 2. Run Apify's Google Maps Scraper (`compass/crawler-google-places`) for "`<term> near <full address>`" and show up to 5 vendors with name, category, rating, review count, phone, website, and a Google Maps link.

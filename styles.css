@@ -863,6 +863,23 @@ section h2 {
   color: var(--color-accent-dark);
 }
 
+/* "Vendor Research" button inside ticket rows and cards */
+
+.btn-sm {
+  padding: 6px 10px;
+  min-height: 32px;
+  font-size: 0.78rem;
+}
+
+.requests-table td.action-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rc-actions {
+  margin-top: 4px;
+}
+
 /* Responsive */
 
 @media (max-width: 900px) {

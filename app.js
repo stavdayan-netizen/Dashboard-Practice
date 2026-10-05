@@ -73,6 +73,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
   const STATUSES = ["New", "Scheduled", "In Progress", "Resolved"];
   const OPEN_STATUSES = ["New", "Scheduled", "In Progress"];
+  const VENDOR_RESEARCH_STATUSES = ["New", "In Progress"]; // open tickets that get a Vendor Research button
   const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
   // Soft, cohesive "candy pastel" palette for the category donut: bright,
@@ -614,6 +615,14 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       th.textContent = c;
       head.appendChild(th);
     });
+    if (isOpen) {
+      const th = document.createElement("th");
+      const label = document.createElement("span");
+      label.className = "visually-hidden";
+      label.textContent = "Vendor Research";
+      th.appendChild(label);
+      head.appendChild(th);
+    }
 
     const body = document.getElementById("requests-table-body");
     const cardsWrap = document.getElementById("requests-cards");
@@ -631,10 +640,14 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     emptyEl.hidden = true;
 
     activeRows.forEach((row) => {
+      // A row/card that contains its own button can't also be role="button"
+      // (assistive tech hides a button's children), so it drops that role.
+      const hasVendorButton = isOpen && VENDOR_RESEARCH_STATUSES.includes(row.status);
+
       // Table row (desktop)
       const tr = document.createElement("tr");
       tr.tabIndex = 0;
-      tr.setAttribute("role", "button");
+      if (!hasVendorButton) tr.setAttribute("role", "button");
       tr.setAttribute("aria-label", "View details for " + row.id + ", " + row.issue);
 
       const cells = [
@@ -667,6 +680,13 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
         tr.appendChild(resolvedTd);
       }
 
+      if (isOpen) {
+        const actionTd = document.createElement("td");
+        actionTd.className = "action-cell";
+        if (hasVendorButton) actionTd.appendChild(createVendorResearchButton(row));
+        tr.appendChild(actionTd);
+      }
+
       tr.addEventListener("click", () => openDialog(row, tr));
       tr.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -680,7 +700,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       const card = document.createElement("div");
       card.className = "request-card";
       card.tabIndex = 0;
-      card.setAttribute("role", "button");
+      card.setAttribute("role", hasVendorButton ? "group" : "button");
       card.setAttribute("aria-label", "View details for " + row.id + ", " + row.issue);
 
       const top = document.createElement("div");
@@ -706,6 +726,13 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       metaText.textContent = metaStr;
       meta.appendChild(metaText);
       card.appendChild(meta);
+
+      if (hasVendorButton) {
+        const actions = document.createElement("div");
+        actions.className = "rc-actions";
+        actions.appendChild(createVendorResearchButton(row));
+        card.appendChild(actions);
+      }
 
       card.addEventListener("click", () => openDialog(row, card));
       card.addEventListener("keydown", (e) => {
@@ -1389,18 +1416,50 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     if (on) checkVendorServer();
   }
 
+  function selectVendorTicket(id) {
+    vendorTicketId = id;
+    vendorSearchSeq++;
+    document.querySelectorAll(".vendor-ticket").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.ticketId === id));
+    });
+    renderVendorDetail();
+  }
+
+  // Opens the Vendor Research screen with this ticket already selected
+  // (keeps any results already showing if it was the selected ticket).
+  function openVendorResearchFor(id) {
+    if (vendorTicketId !== id) selectVendorTicket(id);
+    setVendorMode(true);
+    const selected = document.querySelector('.vendor-ticket[aria-pressed="true"]');
+    if (selected) {
+      selected.scrollIntoView({ block: "nearest" });
+      selected.focus({ preventScroll: true });
+    }
+    document.getElementById("vendor-section").scrollIntoView({ block: "start" });
+  }
+
+  // The button inside a ticket row/card. It must not also trigger the
+  // row's "view details" click or Enter/Space handlers.
+  function createVendorResearchButton(row) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary btn-sm vendor-research-btn";
+    btn.textContent = "Vendor Research";
+    btn.setAttribute("aria-label", "Vendor Research for " + row.id + ", " + row.issue);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openVendorResearchFor(row.id);
+    });
+    btn.addEventListener("keydown", (e) => e.stopPropagation());
+    return btn;
+  }
+
   function wireVendorResearch() {
     document.getElementById("vendor-view-btn").addEventListener("click", () => setVendorMode(!isVendorMode()));
     document.getElementById("find-vendors-btn").addEventListener("click", findVendors);
     document.getElementById("vendor-ticket-list").addEventListener("click", (e) => {
       const btn = e.target.closest(".vendor-ticket");
-      if (!btn) return;
-      vendorTicketId = btn.dataset.ticketId;
-      vendorSearchSeq++;
-      document.querySelectorAll(".vendor-ticket").forEach((b) => {
-        b.setAttribute("aria-pressed", String(b === btn));
-      });
-      renderVendorDetail();
+      if (btn) selectVendorTicket(btn.dataset.ticketId);
     });
   }
 
