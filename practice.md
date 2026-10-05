@@ -17,7 +17,7 @@ Tenant Maintenance Dashboard: a single-page demo for a property manager. Vanilla
 - `index.html`, `styles.css`, `app.js` — the app. PapaParse (CSV) and Chart.js (charts) load from CDN.
 - `maintenance_requests.csv` — 40-row fallback data. `data.js` is generated from it by `generate-data.ps1`; rerun that script after editing the CSV.
 - `demo_upload_sample.csv` — 36-row file for "Download demo CSV". `DEMO_CSV` in `app.js` must stay identical to it.
-- `serve.ps1` — local server: static files plus the `/api/*` routes behind Vendor Research, which read `APIFY_TOKEN` from `.env`. It must keep refusing to serve dotfiles. `.env.example` lists the variable names. `README.md` documents setup. `SPEC.MD` is the original build brief.
+- `serve.ps1` — local server: static files plus the `/api/*` routes behind Vendor Research, which read `APIFY_TOKEN` from `.env`. It must keep refusing to serve dotfiles. `.env.example` lists the variable names. `README.md` documents setup. `SPEC.MD` is the product spec; update it when the user approves a change to behavior or design.
 
 ## Data conventions
 
