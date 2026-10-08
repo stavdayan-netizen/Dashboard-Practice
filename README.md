@@ -59,6 +59,8 @@ const AIRTABLE_CONFIG = {
 
 **What happens without a valid token:** `init()` in `app.js` tries Airtable first; if the request fails for any reason (bad/missing token, network issue, rate limit), it silently falls back to the bundled `maintenance_requests.csv` (or the embedded `data.js` copy). A small badge next to the page title ("Live: Airtable" / "Sample data (CSV)") always shows which one is actually active.
 
+**Automatic refresh (once an hour):** an open page re-reads Airtable and the weather every hour, and also when you come back to the tab after being away that long. It redraws quietly: your Property filter, selected tab and open dialogs stay as they are. If a refresh fails, the data already on screen stays. Data from an uploaded CSV is never replaced, and requests added with + New Request are kept. Nothing refreshes more often than that, so reload the page to see an Airtable change right away.
+
 **Regenerating the token:** if you ever need a fresh one, create it at [airtable.com/create/tokens](https://airtable.com/create/tokens) scoped the same way (one base, `data.records:read` only), then replace the `token` value in `AIRTABLE_CONFIG`.
 
 ## Vendor Research

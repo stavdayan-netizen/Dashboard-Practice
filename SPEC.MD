@@ -1,6 +1,6 @@
 # Tenant Maintenance Dashboard - Implementation Spec
 
-*Last updated 2026-10-06. This spec describes the app as currently built. What changed from the original brief is listed under "Revision notes" at the end.*
+*Last updated 2026-10-08. This spec describes the app as currently built. What changed from the original brief is listed under "Revision notes" at the end.*
 
 ## Goal and scope
 
@@ -100,6 +100,8 @@ Airtable base **Property Maintenance Tickets**:
 - Every row in the app carries a `full_address` value (blank for CSV rows). It is not shown in the tables; Vendor Research uses it as the search location.
 - All sources go through the same validation. Invalid rows are excluded and counted in the status banner, with details in the browser console.
 
+**Automatic refresh:** the app does not poll continuously. Once an hour (and when the tab becomes visible again after an hour or more away), it re-reads Airtable and refreshes the weather, then redraws only if something changed. The Property filter, selected tab, and open dialogs are left alone. A failed refresh keeps the data already on screen and is logged to the console only (no banner). If the page started on the CSV fallback and Airtable is reachable later, it switches to Airtable. A CSV uploaded this session is never replaced, and requests added with + New Request are kept. Failed weather lookups are retried on the same schedule.
+
 ## CSV format (fallback data and uploads)
 
 `maintenance_requests.csv` is one UTF-8 CSV with exactly these headers in this order. `demo_upload_sample.csv` and any uploaded file use the same format:
@@ -161,6 +163,7 @@ Use a clean modern property-management SaaS style: near-white page background, w
 - Vendor Research: only open tickets are listed; the dialog button appears only for New and In Progress tickets and opens the view with that ticket selected; selecting a ticket shows its issue and full address; no Apify request is made until Find Vendors is clicked; results show up to 5 vendors with all seven fields; on a non-local page the notice appears and the button is disabled.
 - `APIFY_TOKEN` appears in no tracked file or served page; `.env` is gitignored and `serve.ps1` does not serve it.
 - Weather & Property Alerts: with live data, one card per property appears between the KPIs and the charts (four in one row on desktop, one column on phones) and follows the Property selector; each card shows the condition image with temperature and conditions overlaid, wind and chance of rain, a borderless 7-day strip, and alerts (today's highlighted); no sunrise/sunset, feels-like, humidity, or gusts are shown; the section shows a notice for CSV data without addresses and is hidden in Vendor Research; no API key appears in any tracked file.
+- Hourly refresh: an Airtable change appears within an hour without reloading; the selected property and tab are preserved; a failed refresh keeps the current data; an uploaded CSV is never overwritten; requests added with + New Request survive a refresh.
 - At common desktop and phone widths, all controls remain usable and the page has no horizontal overflow.
 
 ## Revision notes
@@ -172,5 +175,6 @@ Approved changes since the original brief:
 - Added Upload CSV, the 36-row demo CSV, and a working + New Request form. The original brief excluded a New Request button; this replaces that exclusion.
 - Added the Vendor Research view (Apify Google Maps Scraper through the local server) and its button in the ticket details dialog.
 - Added the Weather & Property Alerts section (Census Geocoder and Open-Meteo, no keys): a compact four-across row of property cards, each with a generated condition image with the temperature and conditions overlaid, wind and chance of rain, a borderless 7-day forecast, and rule-based maintenance alerts. Sunrise/sunset, feels-like, humidity, and gusts were deliberately left out.
+- Added an hourly automatic refresh of the Airtable data and the weather (see Data sources). Before this, data loaded once per page load.
 - Chart colors changed to soft pastels, and priority badges changed to red/pink, orange, and yellow with borders (previously red, orange, amber).
 - The as-of date (`2026-09-23`), the KPI and cost definitions, the CSV format, and the accessibility requirements are unchanged.

@@ -135,8 +135,13 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     property: ALL_PROPERTIES,
     tab: "open",
     lastFocusedEl: null,
-    dataSource: null // "airtable" | "csv", set once loading finishes
+    dataSource: null, // "airtable" | "csv", set once loading finishes
+    uploaded: false // true once the user uploads a CSV; the hourly refresh then leaves the data alone
   };
+
+  // Ids of requests added with "+ New Request" this session, so the hourly
+  // refresh can keep them (they only exist in the browser).
+  const sessionAddedIds = new Set();
 
   let categoryChart = null;
   let statusChart = null;
@@ -999,6 +1004,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     errorEl.hidden = true;
 
     state.rows.push(clean[0]);
+    sessionAddedIds.add(clean[0].id);
     populatePropertySelect(state.rows);
     renderAll();
     closeNewRequestDialog();
@@ -1080,6 +1086,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     state.rows = clean;
     state.property = ALL_PROPERTIES;
     state.dataSource = "csv";
+    state.uploaded = true;
+    sessionAddedIds.clear();
     updateDataSourceBadge();
     populatePropertySelect(state.rows);
     renderAll();
@@ -2259,6 +2267,75 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     }
   }
 
+  // Returns { clean, errors } from Airtable, or null when Airtable isn't
+  // configured or none of its rows passed validation. Throws if the request fails.
+  async function loadAirtableClean() {
+    if (typeof loadRowsFromAirtable !== "function") return null;
+    const airtableRows = await loadRowsFromAirtable();
+    if (!airtableRows) return null;
+    const result = validateRows(airtableRows);
+    if (result.clean.length > 0) return result;
+    if (result.errors.length > 0) {
+      console.error("All rows returned by Airtable failed validation:\n" + result.errors.join("\n"));
+    }
+    return null;
+  }
+
+  // ---- Hourly refresh ----------------------------------------------------
+  // Re-reads Airtable and brings the weather up to date once an hour, and when
+  // the tab becomes visible again after being away that long. A failed refresh
+  // keeps what is already on screen. Uploaded CSV data is never replaced, and
+  // requests added with "+ New Request" are kept.
+
+  const DATA_REFRESH_MS = 60 * 60 * 1000;
+  let lastDataRefresh = Date.now();
+  let dataRefreshing = false;
+
+  async function refreshData() {
+    if (dataRefreshing || state.uploaded) return;
+    dataRefreshing = true;
+    lastDataRefresh = Date.now();
+    try {
+      let result = null;
+      try {
+        result = await loadAirtableClean();
+      } catch (err) {
+        console.warn("Hourly refresh: could not reach Airtable, keeping the current data.", err);
+      }
+
+      if (result) {
+        if (result.errors.length > 0) {
+          console.error("Maintenance data validation errors (Airtable refresh):\n" + result.errors.join("\n"));
+        }
+        const fresh = new Set(result.clean.map((r) => r.id));
+        const kept = state.rows.filter((r) => sessionAddedIds.has(r.id) && !fresh.has(r.id));
+        const next = result.clean.concat(kept);
+        if (state.dataSource !== "airtable" || JSON.stringify(next) !== JSON.stringify(state.rows)) {
+          state.rows = next;
+          state.dataSource = "airtable";
+          updateDataSourceBadge();
+          populatePropertySelect(state.rows);
+        }
+      }
+
+      // Retry weather lookups that failed; renderAll refetches the forecasts
+      // that have gone stale (older than 15 minutes).
+      weatherCache.forEach((entry, key) => {
+        if (entry.status === "error") weatherCache.delete(key);
+      });
+      renderAll();
+    } finally {
+      dataRefreshing = false;
+    }
+  }
+
+  function startAutoRefresh() {
+    setInterval(refreshData, DATA_REFRESH_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && Date.now() - lastDataRefresh >= DATA_REFRESH_MS) refreshData();
+    });
+  }
+
   async function init() {
     wireTabs();
     wireDialog();
@@ -2273,23 +2350,16 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     // Prefer live Airtable data when a token is configured (see
     // AIRTABLE_CONFIG near the top of this file); fall back to the bundled
     // CSV otherwise, or if the Airtable request fails for any reason.
-    if (typeof loadRowsFromAirtable === "function") {
-      try {
-        const airtableRows = await loadRowsFromAirtable();
-        if (airtableRows) {
-          const result = validateRows(airtableRows);
-          if (result.clean.length > 0) {
-            clean = result.clean;
-            errors = result.errors;
-            state.dataSource = "airtable";
-            if (errors.length > 0) showValidationBanner(errors, "Airtable");
-          } else if (result.errors.length > 0) {
-            console.error("All rows returned by Airtable failed validation:\n" + result.errors.join("\n"));
-          }
-        }
-      } catch (err) {
-        console.error("Could not load data from Airtable, falling back to the sample CSV:", err);
+    try {
+      const result = await loadAirtableClean();
+      if (result) {
+        clean = result.clean;
+        errors = result.errors;
+        state.dataSource = "airtable";
+        if (errors.length > 0) showValidationBanner(errors, "Airtable");
       }
+    } catch (err) {
+      console.error("Could not load data from Airtable, falling back to the sample CSV:", err);
     }
 
     if (!clean) {
@@ -2317,6 +2387,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     updateDataSourceBadge();
     populatePropertySelect(clean);
     renderAll();
+    startAutoRefresh();
   }
 
   document.addEventListener("DOMContentLoaded", init);
