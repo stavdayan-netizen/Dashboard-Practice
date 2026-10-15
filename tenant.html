@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tenant Maintenance Portal</title>
+  <link rel="stylesheet" href="tenant.css">
+</head>
+<body>
+  <main class="portal">
+    <header class="portal-header">
+      <h1>Tenant Maintenance Portal</h1>
+      <p class="portal-lead">Tell us what needs fixing and we'll create a request for the property manager.</p>
+    </header>
+
+    <div id="form-message" class="message" role="status" aria-live="polite" hidden></div>
+
+    <form id="request-form" class="card" novalidate>
+      <div class="field">
+        <label for="property">Property</label>
+        <select id="property" name="property" required disabled>
+          <option value="">Loading properties&hellip;</option>
+        </select>
+        <p id="property-hint" class="hint" hidden></p>
+        <p id="property-error" class="field-error" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="issue">What's the problem?</label>
+        <textarea id="issue" name="issue" rows="5" maxlength="1000" required
+          placeholder="For example: the kitchen sink is leaking under the cabinet."></textarea>
+        <p id="issue-count" class="hint hint-right" aria-hidden="true">0 / 1000</p>
+        <p id="issue-error" class="field-error" hidden></p>
+      </div>
+
+      <fieldset class="field priority-field">
+        <legend>Priority</legend>
+        <div class="priority-options">
+          <label class="priority-option">
+            <input type="radio" name="priority" value="Low">
+            <span class="priority-chip priority-low"><strong>Low</strong><small>Can wait</small></span>
+          </label>
+          <label class="priority-option">
+            <input type="radio" name="priority" value="Medium" checked>
+            <span class="priority-chip priority-medium"><strong>Medium</strong><small>Soon</small></span>
+          </label>
+          <label class="priority-option">
+            <input type="radio" name="priority" value="High">
+            <span class="priority-chip priority-high"><strong>High</strong><small>Big impact</small></span>
+          </label>
+          <label class="priority-option">
+            <input type="radio" name="priority" value="Urgent">
+            <span class="priority-chip priority-urgent"><strong>Urgent</strong><small>Unsafe or damaging</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary">Submit request</button>
+      <p class="hint">For an emergency such as fire, gas or a medical problem, call emergency services first.</p>
+    </form>
+
+    <details id="settings" class="card settings">
+      <summary>Settings</summary>
+      <div class="settings-body">
+        <label for="webhook-url">Make webhook URL</label>
+        <input type="url" id="webhook-url" inputmode="url" autocomplete="off" autocapitalize="off"
+          spellcheck="false" placeholder="https://hook.eu1.make.com/&hellip;">
+        <p class="hint">Saved only in this browser (localStorage). It is never part of the code or the GitHub repository.</p>
+        <div class="settings-actions">
+          <button type="button" id="webhook-save" class="btn btn-secondary">Save</button>
+          <button type="button" id="webhook-clear" class="btn btn-ghost">Clear</button>
+        </div>
+        <p id="webhook-status" class="hint" role="status" aria-live="polite"></p>
+      </div>
+    </details>
+  </main>
+
+  <script src="tenant.js"></script>
+</body>
+</html>

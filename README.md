@@ -107,3 +107,51 @@ How it works (all in `app.js`, no API keys, and it works on the public GitHub Pa
 | Extreme heat | high of 90°F or more | 100°F or more |
 
 The thresholds live in `alertsForDay()` in `app.js`. The section needs each property's full address, so it shows a short notice instead of cards when the data comes from the sample CSV or an uploaded CSV (those rows have no address).
+
+## Tenant Maintenance Portal (`tenant.html`)
+
+A separate, phone-friendly page where a tenant reports a problem. It is not linked from the dashboard and the dashboard code is unchanged. Open `tenant.html` the same way as the dashboard (local server, or `https://stavdayan-netizen.github.io/Dashboard-Practice/tenant.html` on GitHub Pages).
+
+The form asks for three things: **Property** (the live list from the Airtable Properties table), **what's the problem**, and **priority** (Low, Medium, High, Urgent). On submit the page POSTs the request to a **Make custom webhook**, and a Make scenario creates the ticket in the Airtable Maintenance Tickets table. A success or error message appears under the title.
+
+Files: `tenant.html`, `tenant.css`, `tenant.js`. To fill the property list, `tenant.js` reads the dashboard's read-only Airtable settings out of `app.js`, so the token still lives in one place.
+
+### What the page sends
+
+A form post (`application/x-www-form-urlencoded`) with these fields, named like the Airtable Tickets fields:
+
+| Field | Value | Airtable field |
+| --- | --- | --- |
+| `id` | Generated, like `TP-20261015-K3F9` (the same ID is reused if you retry a failed send) | `id` |
+| `date_created` | Today's date, `YYYY-MM-DD` | `date_created` |
+| `property` | The property's Airtable **record ID** (`rec…`) | `property` (linked record) |
+| `property_name` | The property's name. Only for readability in Make; there is no Airtable field for it | none |
+| `issue` | The description the tenant typed | `issue` |
+| `category` | Guessed from keywords in the description (for example "leak" gives Plumbing); `General` if nothing matches | `category` |
+| `priority` | `Low`, `Medium`, `High` or `Urgent` | `priority` |
+| `status` | Always `New` | `status` |
+
+`tenant`, `assigned_to`, `date_resolved`, `cost`, `cost_date` and `ai_summary` are not sent. The category is sent because the dashboard rejects a ticket without one; the manager can change it in Airtable.
+
+### Setup
+
+1. **Make: create the scenario.** New scenario, then add these modules in order:
+   1. **Webhooks → Custom webhook.** Create a webhook and copy its URL.
+   2. **Airtable → Create a record** on the base's **Maintenance Tickets** table. Map each field from the table above: `id`, `date_created`, `issue`, `category`, `priority`, `status`. For the linked `property` field, add one item and map `property` to it (Airtable wants the record ID, which is what the page sends).
+   3. **Webhooks → Webhook response** (so the page can confirm the send). Status `200`, body `Accepted`, and a custom header `Access-Control-Allow-Origin` with the value `*`. Without this header the ticket is still created, but the browser blocks the reply and the page can only say it couldn't confirm delivery.
+2. **Teach Make the fields.** Click **Run once** on the scenario, then submit one request from the portal (see Testing). Make learns the field names from that first request. Then turn the scenario **On**.
+3. **Tell the page the URL.** Open `tenant.html`, open **Settings**, paste the webhook URL and press **Save**. It is stored only in that browser's `localStorage`, never in the code or the repo. Each device or browser needs this once.
+
+### Testing
+
+1. Put the scenario in **Run once** (or leave it On) and open `tenant.html` with the URL saved.
+2. Pick a property, describe a problem such as "Kitchen sink is leaking", pick a priority, and press **Submit request**. You should see "Request sent" with a reference like `TP-…`.
+3. In Make, open the scenario's execution history: the webhook module should show the fields above and the Airtable module should have created a record.
+4. In Airtable, find the new row (`id` matches the reference), with status `New` and the right property.
+5. Error checks: submit with nothing filled in (inline errors appear); submit with no URL saved (a message sends you to Settings); save a URL that isn't `https://` (rejected); turn the scenario off and submit (an error with the HTTP code).
+
+### Things to know
+
+- **The dashboard may hide the new ticket.** The dashboard rejects any ticket dated after its demo as-of date (`AS_OF_DATE` in `app.js`, currently `2026-09-23`). A portal ticket created today is dated today, so the dashboard counts it as invalid and shows "1 row failed validation" until that constant is moved forward. This is a deliberate demo setting, so it was left alone.
+- **The webhook URL is a secret.** Anyone who has it can create tickets, so share it only with people you want submitting. Because it is saved per browser, a real tenant would have to be given it, which is fine for a class demo but not for a public rollout. A real rollout would put a small server in between.
+- Nothing from the portal is stored by the page itself; the only thing kept in the browser is the webhook URL.
