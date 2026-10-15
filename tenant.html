@@ -60,9 +60,9 @@
       <p class="hint">For an emergency such as fire, gas or a medical problem, call emergency services first.</p>
     </form>
 
-    <details id="settings" class="card settings">
-      <summary>Settings</summary>
+    <section id="settings" class="card settings" aria-label="Admin settings" hidden>
       <div class="settings-body">
+        <h2 class="settings-title">Admin settings</h2>
         <label for="webhook-url">Make webhook URL</label>
         <input type="url" id="webhook-url" inputmode="url" autocomplete="off" autocapitalize="off"
           spellcheck="false" placeholder="https://hook.eu1.make.com/&hellip;">
@@ -73,7 +73,11 @@
         </div>
         <p id="webhook-status" class="hint" role="status" aria-live="polite"></p>
       </div>
-    </details>
+    </section>
+
+    <footer class="portal-footer">
+      <button type="button" id="admin-toggle" class="admin-toggle" aria-expanded="false" aria-controls="settings">Admin settings</button>
+    </footer>
   </main>
 
   <script src="tenant.js"></script>

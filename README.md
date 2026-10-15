@@ -110,7 +110,9 @@ The thresholds live in `alertsForDay()` in `app.js`. The section needs each prop
 
 ## Tenant Maintenance Portal (`tenant.html`)
 
-A separate, phone-friendly page where a tenant reports a problem. It is not linked from the dashboard and the dashboard code is unchanged. Open `tenant.html` the same way as the dashboard (local server, or `https://stavdayan-netizen.github.io/Dashboard-Practice/tenant.html` on GitHub Pages).
+A separate, phone-friendly page where a tenant reports a problem. It is not linked from the dashboard and the dashboard code is unchanged. It is published with the rest of the project on GitHub Pages at **https://stavdayan-netizen.github.io/Dashboard-Practice/tenant.html** (every push to `master` updates it), and also works from a local server (`http://localhost:8531/tenant.html`).
+
+**Admin settings are hidden from tenants.** The page shows only the form. The webhook URL field lives in an **Admin settings** panel that stays closed until you press the small "Admin settings" link at the very bottom of the page (press it again to hide the panel). A tenant who submits on a device without a saved URL just sees "This form isn't ready yet. Please contact your property manager." Error messages are plain for tenants; while the admin panel is open they also include technical detail (such as the HTTP code), and the same detail is always written to the browser console.
 
 The form asks for three things: **Property** (the live list from the Airtable Properties table), **what's the problem**, and **priority** (Low, Medium, High, Urgent). On submit the page POSTs the request to a **Make custom webhook**, and a Make scenario creates the ticket in the Airtable Maintenance Tickets table. A success or error message appears under the title.
 
@@ -135,14 +137,14 @@ A form post (`application/x-www-form-urlencoded`) with these fields, named like 
 
 ### Setup
 
-The scenario **"Tenant Portal request → Airtable ticket"** has already been built in Make (team "My Team", left switched off). It uses the same three modules as step 1 below, with the Airtable fields mapped by field ID, so steps 1 and 2 only need repeating if you rebuild it. The webhook URL is shown in the scenario's webhook module in Make, and goes in the portal's Settings (step 3), never in this repo.
+The scenario **"Tenant Portal request → Airtable ticket"** has already been built in Make (team "My Team", left switched off). It uses the same three modules as step 1 below, with the Airtable fields mapped by field ID, so steps 1 and 2 only need repeating if you rebuild it. The webhook URL is shown in the scenario's webhook module in Make, and goes in the portal's Admin settings (step 3), never in this repo.
 
 1. **Make: create the scenario.** New scenario, then add these modules in order:
    1. **Webhooks → Custom webhook.** Create a webhook and copy its URL.
    2. **Airtable → Create a record** on the base's **Maintenance Tickets** table. Map each field from the table above: `id`, `date_created`, `issue`, `category`, `priority`, `status`. For the linked `property` field, add one item and map `property` to it (Airtable wants the record ID, which is what the page sends).
    3. **Webhooks → Webhook response** (so the page can confirm the send). Status `200`, body `Accepted`, and a custom header `Access-Control-Allow-Origin` with the value `*`. Without this header the ticket is still created, but the browser blocks the reply and the page can only say it couldn't confirm delivery.
 2. **Teach Make the fields.** Click **Run once** on the scenario, then submit one request from the portal (see Testing). Make learns the field names from that first request. Then turn the scenario **On**.
-3. **Tell the page the URL.** Open `tenant.html`, open **Settings**, paste the webhook URL and press **Save**. It is stored only in that browser's `localStorage`, never in the code or the repo. Each device or browser needs this once.
+3. **Tell the page the URL.** Open `tenant.html`, press **Admin settings** at the bottom of the page, paste the webhook URL and press **Save** (then press **Hide admin settings**). It is stored only in that browser's `localStorage` (key `dashboardPractice.tenantWebhook.v1`), never in the code or the repo. Each device or browser needs this once, so a tenant's own phone will not have it unless you give them the URL.
 
 ### Testing
 
@@ -150,7 +152,7 @@ The scenario **"Tenant Portal request → Airtable ticket"** has already been bu
 2. Pick a property, describe a problem such as "Kitchen sink is leaking", pick a priority, and press **Submit request**. You should see "Request sent" with a reference like `TP-…`.
 3. In Make, open the scenario's execution history: the webhook module should show the fields above and the Airtable module should have created a record.
 4. In Airtable, find the new row (`id` matches the reference), with status `New` and the right property.
-5. Error checks: submit with nothing filled in (inline errors appear); submit with no URL saved (a message sends you to Settings); save a URL that isn't `https://` (rejected); turn the scenario off and submit (an error with the HTTP code).
+5. Error checks: submit with nothing filled in (inline errors appear); submit with no URL saved (tenants see "This form isn't ready yet"; with Admin settings open the message also says the URL is missing); save a URL that isn't `https://` (rejected); turn the scenario off and submit (a plain error, plus the HTTP code while Admin settings is open).
 
 ### Things to know
 

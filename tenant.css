@@ -126,8 +126,7 @@ select:disabled {
 select:focus-visible,
 textarea:focus-visible,
 input[type="url"]:focus-visible,
-button:focus-visible,
-summary:focus-visible {
+button:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
@@ -292,19 +291,38 @@ summary:focus-visible {
 
 /* Settings */
 
-.settings {
-  padding: 0;
+.settings[hidden] {
+  display: none;
 }
 
-.settings summary {
-  padding: 14px 18px;
-  min-height: 48px;
-  font-weight: 600;
+.settings-title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+/* A small, quiet control at the bottom of the page. Tenants have no reason to open it. */
+.portal-footer {
+  text-align: center;
+}
+
+.admin-toggle {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-decoration: underline;
   cursor: pointer;
 }
 
-.settings-body {
-  padding: 0 18px 18px;
+.admin-toggle:hover {
+  color: var(--color-text);
+}
+
+.admin-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .settings-actions {

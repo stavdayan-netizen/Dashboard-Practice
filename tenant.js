@@ -29,6 +29,7 @@
   const submitBtn = $("submit-btn");
   const messageBox = $("form-message");
   const settings = $("settings");
+  const adminToggle = $("admin-toggle");
   const webhookInput = $("webhook-url");
 
   let properties = []; // [{ id: "rec...", name: "10 Harbor View" }]
@@ -91,6 +92,18 @@
   function hideMessage() {
     messageBox.hidden = true;
     messageBox.textContent = "";
+  }
+
+  // Tenants see plain wording. Technical detail is added only while the admin
+  // settings panel is open (and is always written to the console).
+  function adminDetail(text) {
+    return settings.hidden ? "" : " [Admin: " + text + "]";
+  }
+
+  function setAdminOpen(open) {
+    settings.hidden = !open;
+    adminToggle.setAttribute("aria-expanded", String(open));
+    adminToggle.textContent = open ? "Hide admin settings" : "Admin settings";
   }
 
   function setFieldError(inputId, text) {
@@ -273,9 +286,9 @@
 
     const parsed = parseWebhookUrl(safeGet(WEBHOOK_KEY));
     if (parsed.error) {
-      showMessage("error", "Not set up yet. ", "Open Settings below and paste the Make webhook URL once on this device.");
-      settings.open = true;
-      webhookInput.focus();
+      console.warn("Tenant portal: no webhook URL saved on this device.");
+      showMessage("error", "This form isn't ready yet. ",
+        "Please contact your property manager." + adminDetail("no webhook URL is saved on this device. Paste it below and press Save."));
       return;
     }
 
@@ -299,15 +312,21 @@
       updateIssueCount();
       pendingId = newTicketId();
     } else if (result.status > 0) {
-      showMessage("error", "The request wasn't accepted. ",
-        "The webhook answered with HTTP " + result.status + ". Check the webhook URL in Settings and that the Make scenario is turned on, then try again.");
+      console.error("Tenant portal: the webhook answered with HTTP " + result.status + ".");
+      showMessage("error", "We couldn't send your request. ",
+        "Please try again in a moment, or contact your property manager." +
+        adminDetail("the webhook answered HTTP " + result.status + ". Check the URL below and that the Make scenario is running."));
     } else if (result.aborted) {
-      showMessage("error", "No answer from the webhook. ", "It took longer than " + (SUBMIT_TIMEOUT_MS / 1000) + " seconds. Try again.");
+      console.error("Tenant portal: no answer from the webhook within " + (SUBMIT_TIMEOUT_MS / 1000) + " seconds.");
+      showMessage("error", "No answer from the server. ",
+        "Please try again in a moment." + adminDetail("the webhook took longer than " + (SUBMIT_TIMEOUT_MS / 1000) + " seconds to answer."));
     } else {
       // The browser gives no detail here: it could be a network problem, or the
       // request got through and only the reply was blocked (no CORS header).
-      showMessage("warning", "Couldn't confirm delivery. ",
-        "Check your connection and try again. If you've submitted once already, look for " + fields.id + " in Airtable first. Making sure the Make scenario answers with an Access-Control-Allow-Origin header (see the README) lets this page confirm each send.");
+      console.warn("Tenant portal: delivery of " + fields.id + " could not be confirmed.");
+      showMessage("warning", "We couldn't confirm that your request arrived. ",
+        "Check your connection. Before sending it again, contact your property manager and quote reference " + fields.id + "." +
+        adminDetail("it may have been delivered. Look for " + fields.id + " in Airtable. Make's Webhook response should send an Access-Control-Allow-Origin header so the page can confirm each send."));
     }
   }
 
@@ -328,7 +347,11 @@
     const saved = safeGet(WEBHOOK_KEY);
     webhookInput.value = saved;
     describeSaved();
-    if (!saved) settings.open = true;
+    adminToggle.addEventListener("click", () => {
+      const open = settings.hidden;
+      setAdminOpen(open);
+      if (open) webhookInput.focus();
+    });
 
     $("webhook-save").addEventListener("click", () => {
       const parsed = parseWebhookUrl(webhookInput.value);
