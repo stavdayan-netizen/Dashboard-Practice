@@ -24,7 +24,7 @@ Tenant Maintenance Dashboard: a single-page demo for a property manager. Vanilla
 - Load order: Airtable first, bundled CSV as fallback. The header badge shows which is active ("Live: Airtable" / "Sample data (CSV)").
 - Airtable base `appIl5LOY1FMfCPUR`: tickets table `tblk60sOTkEpyDmr1`, Properties table `tbl7OhvkXrPXmCAuB`. The ticket `property` field is a linked record (the API returns record IDs), so names are resolved through the Properties table.
 - Each row carries `full_address` (Airtable lookup). It is not displayed; it's kept for the planned vendor-search integration.
-- All data (Airtable, CSV, upload, New Request) goes through `validateRows()`. Rules: unique `id`; `date_created`, `date_resolved`, `cost_date` must not be after `AS_OF_DATE` (`2026-09-23`, the demo "today"); `cost` and `cost_date` are both present or both blank; category, priority, and status come from fixed lists.
+- All data (Airtable, CSV, upload, New Request) goes through `validateRows()`. Rules: unique `id`; `date_created`, `date_resolved`, `cost_date` must not be after `AS_OF_DATE` (today's date on the viewer's clock); `cost` and `cost_date` are both present or both blank; category, priority, and status come from fixed lists.
 - Parse CSV with PapaParse, never `split(',')`.
 - Upload CSV and + New Request change in-memory data only; nothing is written back to Airtable or the CSV.
 

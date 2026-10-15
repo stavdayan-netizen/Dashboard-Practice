@@ -3,8 +3,24 @@
 
   // ---- Configuration -------------------------------------------------
 
-  const AS_OF_DATE = "2026-09-23"; // demo "today"; change this to move the demo forward/back
-  const YTD_START_DATE = "2026-01-01";
+  // "Today" comes from the viewer's clock (local calendar date), so the
+  // dashboard always works as of today. It is re-read on every hourly refresh
+  // so a tab left open past midnight rolls over. Year to date starts on
+  // January 1 of the same year.
+  function todayIso() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  let AS_OF_DATE = todayIso();
+  let YTD_START_DATE = AS_OF_DATE.slice(0, 4) + "-01-01";
+
+  function updateAsOfDate() {
+    AS_OF_DATE = todayIso();
+    YTD_START_DATE = AS_OF_DATE.slice(0, 4) + "-01-01";
+  }
+
   const ALL_PROPERTIES = "All Properties";
 
   // Live data source: Airtable ("Property Maintenance Tickets" base,
@@ -2292,9 +2308,17 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   let dataRefreshing = false;
 
   async function refreshData() {
-    if (dataRefreshing || state.uploaded) return;
-    dataRefreshing = true;
+    if (dataRefreshing) return;
     lastDataRefresh = Date.now();
+    if (state.uploaded) {
+      // Uploaded data stays; only the "today" the numbers are measured against moves on.
+      const before = AS_OF_DATE;
+      updateAsOfDate();
+      if (AS_OF_DATE !== before) renderAll();
+      return;
+    }
+    dataRefreshing = true;
+    updateAsOfDate();
     try {
       let result = null;
       try {

@@ -53,7 +53,7 @@ A view for finding local vendors for an open ticket.
 
 ### Weather & Property Alerts
 
-A compact section between the KPI cards and the charts showing current weather, a 7-day forecast, and maintenance alerts for each property. It follows the Property selector (All Properties shows every property; a selected property shows only its card) and is hidden in the Vendor Research view. It uses real current dates, not the as-of date.
+A compact section between the KPI cards and the charts showing current weather, a 7-day forecast, and maintenance alerts for each property. It follows the Property selector (All Properties shows every property; a selected property shows only its card) and is hidden in the Vendor Research view. It uses real current dates, the same "today" as the as-of date.
 
 - **Card layout:** desktop shows all four property cards side by side in one row; two columns on tablets (up to 1180px), one column on phones (up to 700px). Cards are kept short (about 306px tall with no alerts). Each card has, top to bottom: property name and city/state/ZIP (marked "approx. location" when the location is approximate); the **condition image**; the **7-day forecast**; and the **alerts** block.
 - **Condition image:** a sky image matching the current condition (clear, partly cloudy, overcast, fog, drizzle, rain, heavy rain, freezing rain, snow, thunderstorm; day or night variants) with the **current temperature** and **condition text overlaid** on it, plus two small chips: **wind** (speed, compass direction, and a direction arrow) and **chance of rain** for today. A darker gradient on the text side keeps the overlay readable. The images are generated in the browser (canvas) and cached per condition, so there are no image files, downloads, or licensing. If generation fails the card falls back to a plain blue background and stays readable. Sunrise/sunset, feels-like, humidity, and gusts are intentionally not shown.
@@ -74,16 +74,16 @@ A compact section between the KPI cards and the charts showing current weather, 
 
 ## Data definitions and calculations
 
-Use `2026-09-23` as the demo **as-of date**, defined in one easy-to-change configuration constant. Data must contain no dates after it; **any row from any source (Airtable, CSV, upload, or New Request) with a date after it is rejected by validation and reported.** All date comparisons use calendar dates, inclusive, rather than rolling 30-day windows.
+The **as-of date is today** on the viewer's clock (local calendar date), held in one variable and re-read at every hourly refresh so a tab left open past midnight rolls over. Data must contain no dates after it; **any row from any source (Airtable, CSV, upload, or New Request) with a date after it is rejected by validation and reported.** All date comparisons use calendar dates, inclusive, rather than rolling 30-day windows.
 
 | Metric | Calculation after property selection |
 | --- | --- |
 | Open Requests | Count status `New`, `Scheduled`, or `In Progress`. |
 | Urgent Open Requests | Count open requests with priority `Urgent`. |
-| Resolved This Month | Count status `Resolved` with `date_resolved` in September 2026 (the as-of date's month). |
+| Resolved This Month | Count status `Resolved` with `date_resolved` in the as-of date's calendar month (for example October 2026 on any day in October 2026). |
 | Avg. Resolution Time | Mean of `date_resolved - date_created`, in calendar days, among all resolved requests for the selected property as of the as-of date. Show one decimal and `-` if none qualify. Same-day resolution is 0 days. |
 | Category / status charts | Count all requests for the selected property, including resolved ones. Zero-count categories may be omitted consistently. |
-| YTD cost per property | Sum numeric `cost` for rows with `cost_date` from January 1, 2026 through the as-of date, inclusive, grouped by property. Blank cost is excluded. The portfolio total is the sum of displayed property totals. |
+| YTD cost per property | Sum numeric `cost` for rows with `cost_date` from January 1 of the as-of date's year through the as-of date, inclusive, grouped by property. Blank cost is excluded. The portfolio total is the sum of displayed property totals. |
 
 `cost` is an **actual recorded cost**, not an estimate. A request can have a partial recorded cost while still open; its `cost_date` then records when that cost was incurred. Consequently, YTD cost must not be calculated from `date_created` or only from resolved requests. Do not use future costs. For the demo, a single request has at most one total actual cost and one corresponding cost date; this is a deliberate simplification.
 
@@ -177,4 +177,5 @@ Approved changes since the original brief:
 - Added the Weather & Property Alerts section (Census Geocoder and Open-Meteo, no keys): a compact four-across row of property cards, each with a generated condition image with the temperature and conditions overlaid, wind and chance of rain, a borderless 7-day forecast, and rule-based maintenance alerts. Sunrise/sunset, feels-like, humidity, and gusts were deliberately left out.
 - Added an hourly automatic refresh of the Airtable data and the weather (see Data sources). Before this, data loaded once per page load.
 - Chart colors changed to soft pastels, and priority badges changed to red/pink, orange, and yellow with borders (previously red, orange, amber).
-- The as-of date (`2026-09-23`), the KPI and cost definitions, the CSV format, and the accessibility requirements are unchanged.
+- The as-of date is now today's date instead of the fixed demo date `2026-09-23`, so tickets from the Tenant Maintenance Portal (dated today) are accepted. As a result "Resolved This Month" follows the current calendar month and year to date starts on January 1 of the current year; the sample data still ends on 2026-09-23.
+- The KPI and cost definitions (apart from the date they are measured against), the CSV format, and the accessibility requirements are unchanged.

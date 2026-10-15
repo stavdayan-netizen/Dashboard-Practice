@@ -32,7 +32,7 @@ then open `http://localhost:8531`.
    ```
    then refresh the page.
 
-The demo's "as-of" date (`2026-09-23`) is a single constant, `AS_OF_DATE`, near the top of `app.js`.
+The dashboard's "as-of" date is **today's date** on the viewer's clock (`AS_OF_DATE`, near the top of `app.js`), and it moves on by itself at midnight. Rows dated after today are rejected, "Resolved This Month" counts the current calendar month, and year to date runs from January 1 of the current year to today. The sample data is dated through September 23, 2026, so as time passes the month KPI shows 0 until newer tickets are resolved, and a new year starts with empty year-to-date costs.
 
 ## Upload CSV / + New Request
 
@@ -152,6 +152,6 @@ A form post (`application/x-www-form-urlencoded`) with these fields, named like 
 
 ### Things to know
 
-- **The dashboard may hide the new ticket.** The dashboard rejects any ticket dated after its demo as-of date (`AS_OF_DATE` in `app.js`, currently `2026-09-23`). A portal ticket created today is dated today, so the dashboard counts it as invalid and shows "1 row failed validation" until that constant is moved forward. This is a deliberate demo setting, so it was left alone.
+- **The dashboard's "today" matches the portal's.** Both use the viewer's local date, so a ticket created today is accepted by the dashboard. If a device's clock is set to an earlier date than the ticket's, the dashboard rejects that ticket until the clocks agree.
 - **The webhook URL is a secret.** Anyone who has it can create tickets, so share it only with people you want submitting. Because it is saved per browser, a real tenant would have to be given it, which is fine for a class demo but not for a public rollout. A real rollout would put a small server in between.
 - Nothing from the portal is stored by the page itself; the only thing kept in the browser is the webhook URL.
