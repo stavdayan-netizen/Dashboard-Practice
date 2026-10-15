@@ -135,6 +135,8 @@ A form post (`application/x-www-form-urlencoded`) with these fields, named like 
 
 ### Setup
 
+The scenario **"Tenant Portal request → Airtable ticket"** has already been built in Make (team "My Team", left switched off). It uses the same three modules as step 1 below, with the Airtable fields mapped by field ID, so steps 1 and 2 only need repeating if you rebuild it. The webhook URL is shown in the scenario's webhook module in Make, and goes in the portal's Settings (step 3), never in this repo.
+
 1. **Make: create the scenario.** New scenario, then add these modules in order:
    1. **Webhooks → Custom webhook.** Create a webhook and copy its URL.
    2. **Airtable → Create a record** on the base's **Maintenance Tickets** table. Map each field from the table above: `id`, `date_created`, `issue`, `category`, `priority`, `status`. For the linked `property` field, add one item and map `property` to it (Airtable wants the record ID, which is what the page sends).
