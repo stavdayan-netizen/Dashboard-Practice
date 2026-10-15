@@ -192,9 +192,17 @@
     hint.hidden = false;
   }
 
+  let propertyErrorReason = ""; // why the last property load failed (shown while the admin panel is open)
+
+  function renderPropertyError() {
+    if (!propertyErrorReason) return;
+    showPropertyLoadError("Couldn't load the property list. Check your connection." + adminDetail(propertyErrorReason));
+  }
+
   async function loadProperties() {
     const hint = $("property-hint");
     hint.hidden = true;
+    propertyErrorReason = "";
     propertySelect.disabled = true;
     propertySelect.textContent = "";
     const loading = document.createElement("option");
@@ -209,7 +217,10 @@
       renderProperties();
     } catch (err) {
       console.error("Could not load properties:", err);
-      showPropertyLoadError("Couldn't load the property list. Check your connection.");
+      propertyErrorReason = location.protocol === "file:"
+        ? "this page was opened as a file, so it can't read app.js. Open it from the GitHub Pages address or a local server instead."
+        : (err && err.message) || "unknown error";
+      renderPropertyError();
     }
   }
 
@@ -350,6 +361,7 @@
     adminToggle.addEventListener("click", () => {
       const open = settings.hidden;
       setAdminOpen(open);
+      renderPropertyError(); // adds or removes the technical reason under the property list
       if (open) webhookInput.focus();
     });
 
