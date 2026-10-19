@@ -300,8 +300,18 @@
   // Attachments are kept as durable references (id, filename, mime) plus a file path
   // or, for files added in this demo, a small data URL. In production this becomes a
   // call that returns a fresh Airtable link, because those links expire after about 2 hours.
+  // Files stored in the browser (equipment history attachments) are looked up by id and shown through a
+  // temporary object URL, cached per file so a thumbnail and its "open" action share one.
+  const objectUrls = new Map();
+
   async function resolveAttachmentUrl(att) {
-    return att.dataUrl || att.path || "";
+    if (att.dataUrl) return att.dataUrl;
+    if (att.path) return att.path;
+    if (att.id && window.ReceiptStore) {
+      if (!objectUrls.has(att.id)) objectUrls.set(att.id, URL.createObjectURL(await window.ReceiptStore.getBlob(att)));
+      return objectUrls.get(att.id);
+    }
+    return "";
   }
 
   async function openAttachment(att) {
@@ -406,6 +416,7 @@
 
   async function resetDemo() {
     try { localStorage.removeItem(STORE_KEY); } catch (err) { /* ignore */ }
+    if (window.ReceiptStore) await window.ReceiptStore.clearScope("history"); // the files added to history events
     data = null;
     await ensureLoaded();
     render();
@@ -582,6 +593,7 @@
       actions.appendChild(twoStepButton("del-" + rec.id, "Delete", "Click again to delete", "btn btn-ghost sys-btn-sm", () => {
         // Tickets that pointed at this item lose the link; the tickets themselves are untouched.
         linkedTickets(rec.id).forEach((t) => dash().updateTicket(t.id, { demo: { equipment_ids: (t.demo.equipment_ids || []).filter((i) => i !== rec.id) } }));
+        data.history.filter((h) => h.equipment_id === rec.id).forEach(deleteEventFiles);
         data.equipment = data.equipment.filter((r) => r.id !== rec.id);
         data.history = data.history.filter((h) => h.equipment_id !== rec.id);
         persist();
@@ -714,16 +726,65 @@
     return li;
   }
 
-  function manualEntry(e) {
+  // Attachments on a manual event are manager only (photos, and receipts or other documents).
+  const EVENT_ATTACH_KINDS = [["photos", "Photos"], ["documents", "Receipts and documents"]];
+  const eventFiles = (e) => EVENT_ATTACH_KINDS.reduce((all, [key]) => all.concat((e.attachments && e.attachments[key]) || []), []);
+
+  // Deletes the stored files of an event that is being removed (seeded demo files are static and stay).
+  function deleteEventFiles(e) {
+    if (!window.ReceiptStore) return;
+    eventFiles(e).forEach((ref) => window.ReceiptStore.remove(ref).catch(() => {}));
+  }
+
+  // One attachment as it appears inside a history entry: the thumbnail or file tile (click to open the
+  // original), its name, and a Download link.
+  function eventAttachment(ref) {
+    const wrap = el("div", "sys-ev-attach");
+    wrap.appendChild(attachmentNode(ref));
+    const status = el("span", "sys-receipt-status");
+    status.setAttribute("role", "status");
+    const dl = el("button", "sys-link-btn", "Download");
+    dl.type = "button";
+    dl.setAttribute("aria-label", "Download " + ref.filename);
+    dl.addEventListener("click", () => {
+      window.ReceiptStore.download(ref).then(() => { status.textContent = ""; }, (err) => { status.textContent = err.message; });
+    });
+    wrap.append(dl, status);
+    return wrap;
+  }
+
+  function manualEntry(e, rec) {
+    const manager = isManager();
     const li = el("li", "sys-event");
     li.appendChild(el("span", "sys-event-date", fmtDate(e.date)));
-    const body = el("div");
+    const body = el("div", "sys-event-main");
     body.appendChild(el("div", "sys-event-summary", e.description || "No description recorded."));
     const meta = el("div", "sys-event-meta");
     meta.appendChild(badge(label(e.type) + " (no ticket)", "muted"));
-    if (isManager() && e.vendor) meta.appendChild(el("span", null, e.vendor));
-    if (isManager() && typeof e.cost === "number") meta.appendChild(el("span", null, money(e.cost)));
+    if (manager && e.vendor) meta.appendChild(el("span", null, e.vendor));
+    if (manager && typeof e.cost === "number") meta.appendChild(el("span", null, money(e.cost)));
     body.appendChild(meta);
+
+    // The files live in the browser's file store and are referenced here; they are shown to managers only.
+    if (manager && window.ReceiptStore) {
+      EVENT_ATTACH_KINDS.forEach(([key, text]) => {
+        const refs = (e.attachments && e.attachments[key]) || [];
+        if (!refs.length) return;
+        const group = el("div", "sys-attach-group");
+        group.appendChild(el("div", "sys-attach-label", text));
+        const grid = el("div", "sys-attach-grid");
+        refs.forEach((ref) => grid.appendChild(eventAttachment(ref)));
+        group.appendChild(grid);
+        body.appendChild(group);
+      });
+    }
+    if (manager) {
+      const edit = el("button", "sys-link-btn", "Edit event");
+      edit.type = "button";
+      edit.setAttribute("aria-label", "Edit the event: " + (e.description || e.type));
+      edit.addEventListener("click", () => openEventDialog(rec, e));
+      body.appendChild(edit);
+    }
     li.appendChild(body);
     return li;
   }
@@ -747,45 +808,103 @@
 
     const list = el("ul", "sys-history-list");
     if (!entries.length) list.appendChild(el("li", "sys-empty", "No history yet. Link a ticket to this item, or add an event below."));
-    entries.forEach((e) => list.appendChild(e.kind === "ticket" ? ticketEntry(e.ticket) : manualEntry(e.event)));
+    entries.forEach((e) => list.appendChild(e.kind === "ticket" ? ticketEntry(e.ticket) : manualEntry(e.event, rec)));
     wrap.appendChild(list);
-    if (isManager()) wrap.appendChild(historyForm(rec));
+    if (isManager()) {
+      const add = el("div", "sys-cat-actions");
+      add.appendChild(addButton("Add history event", () => openEventDialog(rec, null)));
+      wrap.appendChild(add);
+    }
     return wrap;
   }
 
-  function historyForm(rec) {
-    const box = el("form", "sys-event-form");
-    box.noValidate = true;
-    const grid = el("div", "form-grid");
+  // Add or edit a manual history event (one with no ticket), including its photos and documents.
+  // Files are staged in the form and only stored when it is saved; if saving fails nothing is left behind.
+  function openEventDialog(rec, existing) {
+    const isNew = !existing;
+    const base = existing ? clone(existing) : { id: null, equipment_id: rec.id, date: todayIso(), type: "service", description: "", vendor: null, cost: null };
+    const att = base.attachments || {};
+    const body = openDialog((isNew ? "Add history event" : "Edit history event") + " — " + rec.type);
+    const form = el("form");
+    form.noValidate = true;
+    body.appendChild(form);
     const f = makeForm();
-    f.field(grid, "date", "Date", "date", { value: todayIso() });
-    f.field(grid, "type", "Type", "select", { options: EVENT_TYPES.map((t) => [t, label(t)]), blank: false, value: "service" });
-    f.field(grid, "description", "What happened", "text", { wide: true });
-    f.field(grid, "vendor", "Vendor (optional)", "text");
-    f.field(grid, "cost", "Cost (optional)", "number");
-    box.appendChild(el("p", "sys-sub", "For events with no ticket, such as a purchase or an inspection. To record a repair, link its ticket to this item from the ticket instead."));
-    box.appendChild(grid);
-    const err = el("p", "form-error");
-    err.hidden = true;
-    box.appendChild(err);
+    const g1 = group(form, "Event");
+    g1.appendChild(el("p", "sys-sub", "For events with no ticket, such as a purchase, an installation or an inspection. To record a repair, link its ticket to this item from the ticket instead."));
+    const gr1 = grid(g1);
+    f.field(gr1, "date", "Date", "date", { value: base.date });
+    f.field(gr1, "type", "Type", "select", { options: EVENT_TYPES.filter((t) => t !== "ticket").map((t) => [t, label(t)]), blank: false, value: base.type });
+    f.field(gr1, "description", "What happened", "text", { value: base.description, wide: true });
+    f.field(gr1, "vendor", "Company or vendor (optional)", "text", { value: base.vendor });
+    f.field(gr1, "cost", "Cost (optional)", "number", { value: base.cost });
+
+    const g2 = group(form, "Photos and documents");
+    g2.appendChild(el("p", "sys-sub", "Manager only: attachments are hidden from the tenant preview."));
+    const gr2 = grid(g2);
+    const store = window.ReceiptStore;
+    const photos = store.createEditor({ title: "Photos (condition, installation, inspection or maintenance)", initial: att.photos, imagesOnly: true, scope: "history" });
+    const docs = store.createEditor({ title: "Receipts, invoices and other documents (PDF or images)", initial: att.documents, scope: "history" });
+    gr2.append(photos.node, docs.node);
+
+    const setErr = formError(form);
     const actions = el("div", "form-actions");
-    const save = el("button", "btn btn-secondary sys-btn-sm", "Add history event");
+    if (!isNew) {
+      actions.appendChild(twoStepButton("del-" + base.id, "Delete event", "Click again to delete", "btn btn-ghost", () => {
+        deleteEventFiles(existing);
+        data.history = data.history.filter((h) => h.id !== base.id);
+        persist();
+        closeDialog();
+        render();
+        setStatus("Deleted the history event.", false);
+      }));
+    }
+    const cancel = el("button", "btn btn-ghost", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", closeDialog);
+    const save = el("button", "btn btn-primary", isNew ? "Add event" : "Save changes");
     save.type = "submit";
-    actions.appendChild(save);
-    box.appendChild(actions);
-    box.addEventListener("submit", (ev) => {
+    actions.append(cancel, save);
+    form.appendChild(actions);
+
+    form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
+      setErr("");
       const date = f.get("date");
       const desc = f.get("description");
       const cost = f.get("cost");
-      if (!date || !desc) { err.textContent = "Add a date and a short description."; err.hidden = false; return; }
-      if (cost !== null && (isNaN(Number(cost)) || Number(cost) < 0)) { err.textContent = "Cost must be zero or more."; err.hidden = false; return; }
-      data.history.push({ id: uid("ev"), equipment_id: rec.id, date, type: f.get("type"), description: desc, vendor: f.get("vendor"), cost: cost === null ? null : Number(cost) });
-      persist();
+      if (!date || !desc) { setErr("Add a date and a short description."); return; }
+      if (date > todayIso()) { setErr("The date can't be in the future."); return; }
+      if (cost !== null && (isNaN(Number(cost)) || Number(cost) < 0)) { setErr("Cost must be zero or more."); return; }
+      save.disabled = true;
+
+      // Store the new files first; if either list fails, everything stored in this attempt is undone.
+      let p = null;
+      let d = null;
+      try {
+        p = await photos.commit();
+        d = await docs.commit();
+      } catch (err) {
+        if (p) await Promise.all(p.added.map((r) => store.remove(r).catch(() => {})));
+        setErr("Couldn't save the files: " + err.message);
+        save.disabled = false;
+        return;
+      }
+
+      const rec2 = Object.assign({}, base, {
+        date, type: f.get("type"), description: desc, vendor: f.get("vendor"), cost: cost === null ? null : Number(cost),
+        attachments: { photos: p.refs, documents: d.refs }
+      });
+      if (isNew) { rec2.id = uid("ev"); data.history.push(rec2); }
+      else { const i = data.history.findIndex((h) => h.id === rec2.id); data.history[i] = rec2; }
+      const saved = persist();
+      // The event no longer points at the removed files, so they can go.
+      await Promise.all(p.removed.concat(d.removed).map((r) => store.remove(r).catch(() => {})));
+      expanded.add("hist:" + rec.id);
+      closeDialog();
       render();
-      setStatus("History event added to " + rec.type + ".", false);
+      if (saved) setStatus((isNew ? "History event added to " : "History event saved for ") + rec.type + ".", false);
     });
-    return box;
+    f.ctl.date.focus();
   }
 
   // ---- Utilities and shutoffs -------------------------------------------

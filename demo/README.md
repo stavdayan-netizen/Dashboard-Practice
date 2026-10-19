@@ -28,6 +28,9 @@ The Systems & Equipment view (`systems.js`) reads these files once, then keeps a
 ## Receipts and invoices
 Receipts belong to the **ticket**: `receipts` in `ticket_details.json` holds durable references (`id`, `filename`, `mime`, `size`). Two tickets ship with fictional seeded receipts that point at static files in `demo/files/` through a `path` (`HV-009` has a PDF invoice and a PNG parts receipt, `HV-006` a PNG receipt). Receipts a manager uploads in the demo are stored in the browser's **IndexedDB** (database `dashboardPractice.demoReceipts`), not in localStorage, and the ticket keeps only the reference. Equipment history links to those references and never copies the files. The files stay in this browser only and disappear if the browser data is cleared; "Reset demo ticket edits" deletes them. Servicing company, cost and cost date are the ticket's existing Assigned To, cost and cost date; `repair_date` and `repair_summary` are new per-ticket fields.
 
+## Attachments on manual history events
+A manual history event in `equipment_history.json` can carry `attachments: { photos: [], documents: [] }` of durable references (`id`, `filename`, `mime`, `size`). Two seeded events do: the furnace inspection (`ev-011`, a photo) and the refrigerator purchase (`ev-001`, a receipt image), both fictional static files in `demo/files/` referenced by `path`. Files a manager adds in the demo go to the same browser file store (IndexedDB) as ticket receipts, tagged with a scope (`history` or `ticket`) so each feature's reset deletes only its own files. They are manager only.
+
 ## What the demo data deliberately contains
 - Complete, partial and empty equipment records. `Not Provided` (microwave, CO detector) means the information is unknown, not that the item is absent. `No` (garbage disposal, garage) means absent.
 - Custom equipment types (thermostat, kitchen sink drain, kitchen faucet, hall bathroom toilet, sliding balcony door).

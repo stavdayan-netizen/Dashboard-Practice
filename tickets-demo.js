@@ -356,7 +356,7 @@
       // 1) store the newly added files; if one fails, undo the ones already stored
       const added = [];
       try {
-        for (const file of staged.adds) added.push(await store().save(file));
+        for (const file of staged.adds) added.push(await store().save(file, "ticket"));
       } catch (err) {
         await Promise.all(added.map((r) => store().remove(r).catch(() => {})));
         fail("Couldn't save the receipts: " + err.message);
@@ -390,8 +390,9 @@
     ctl.category.focus();
   }
 
-  // "Reset demo ticket edits" also deletes the receipt files stored in this browser.
-  if (dash() && dash().onReset) dash().onReset(() => (store() ? store().clearAll() : null));
+  // "Reset demo ticket edits" also deletes the ticket receipt files stored in this browser
+  // (and only those: equipment history attachments are a separate scope).
+  if (dash() && dash().onReset) dash().onReset(() => (store() ? store().clearScope("ticket") : null));
 
   window.TicketsDemo = { decorate };
 })();
