@@ -23,6 +23,11 @@
 
   const ALL_PROPERTIES = "All Properties";
 
+  // Demo mode (index.html?demo=1): shows the fictional demo data under demo/
+  // for 10 Harbor View instead of Airtable. It reads nothing from and writes
+  // nothing to Airtable, so the real data and the real dashboard are untouched.
+  const DEMO_MODE = new URLSearchParams(location.search).has("demo");
+
   // Live data source: Airtable ("Property Maintenance Tickets" base,
   // "Maintenance Tickets" table -- field names match the CSV schema below).
   //
@@ -2278,6 +2283,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       badge.textContent = "Sample data (CSV)";
       badge.className = "data-source-badge data-source-badge--csv";
       badge.hidden = false;
+    } else if (state.dataSource === "demo") {
+      badge.textContent = "Demo data (fictional)";
+      badge.className = "data-source-badge data-source-badge--demo";
+      badge.hidden = false;
     } else {
       badge.hidden = true;
     }
@@ -2310,6 +2319,13 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   async function refreshData() {
     if (dataRefreshing) return;
     lastDataRefresh = Date.now();
+    if (DEMO_MODE) {
+      // The demo files never change, so there is nothing to re-read. Redrawing
+      // moves "today" on and refreshes the weather forecasts that have gone stale.
+      updateAsOfDate();
+      renderAll();
+      return;
+    }
     if (state.uploaded) {
       // Uploaded data stays; only the "today" the numbers are measured against moves on.
       const before = AS_OF_DATE;
@@ -2360,6 +2376,31 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     });
   }
 
+  // ---- Demo mode ---------------------------------------------------------
+
+  // Reads the fictional property and tickets from demo/ and attaches the
+  // property's full address to every ticket (as the Airtable lookup does), so
+  // the weather section works in demo mode too.
+  async function loadDemoRows() {
+    const [propsRes, csvRes] = await Promise.all([fetch("demo/properties.json"), fetch("demo/tickets.csv")]);
+    if (!propsRes.ok || !csvRes.ok) throw new Error("demo files not found (HTTP " + propsRes.status + " / " + csvRes.status + ")");
+    const props = (await propsRes.json()).records || [];
+    const addressByName = {};
+    props.forEach((p) => { addressByName[p.name] = p.full_address || ""; });
+    const parsed = Papa.parse(await csvRes.text(), { header: true, skipEmptyLines: true });
+    return parsed.data.map((row) => Object.assign({}, row, { full_address: addressByName[row.property] || "" }));
+  }
+
+  function showDemoNote() {
+    document.title += " (Demo)";
+    const note = document.createElement("div");
+    note.className = "demo-note";
+    note.setAttribute("role", "note");
+    note.textContent = "Demo mode: every ticket, equipment record and contact shown here is fictional test data for 10 Harbor View. Nothing is read from or saved to Airtable.";
+    const main = document.getElementById("main-content");
+    main.parentNode.insertBefore(note, main);
+  }
+
   async function init() {
     wireTabs();
     wireDialog();
@@ -2371,19 +2412,40 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     let clean = null;
     let errors = [];
 
+    if (DEMO_MODE) {
+      showDemoNote();
+      try {
+        const result = validateRows(await loadDemoRows());
+        if (result.clean.length === 0) {
+          showFatalError("No valid rows found in demo/tickets.csv.");
+          return;
+        }
+        clean = result.clean;
+        errors = result.errors;
+        state.dataSource = "demo";
+        if (errors.length > 0) showValidationBanner(errors, "demo/tickets.csv");
+      } catch (err) {
+        console.error("Could not load the demo data:", err);
+        showFatalError("Could not load the demo data. Demo mode needs a web server (not a file opened directly): run serve.ps1 and open http://localhost:8531/?demo=1");
+        return;
+      }
+    }
+
     // Prefer live Airtable data when a token is configured (see
     // AIRTABLE_CONFIG near the top of this file); fall back to the bundled
     // CSV otherwise, or if the Airtable request fails for any reason.
-    try {
-      const result = await loadAirtableClean();
-      if (result) {
-        clean = result.clean;
-        errors = result.errors;
-        state.dataSource = "airtable";
-        if (errors.length > 0) showValidationBanner(errors, "Airtable");
+    if (!DEMO_MODE) {
+      try {
+        const result = await loadAirtableClean();
+        if (result) {
+          clean = result.clean;
+          errors = result.errors;
+          state.dataSource = "airtable";
+          if (errors.length > 0) showValidationBanner(errors, "Airtable");
+        }
+      } catch (err) {
+        console.error("Could not load data from Airtable, falling back to the sample CSV:", err);
       }
-    } catch (err) {
-      console.error("Could not load data from Airtable, falling back to the sample CSV:", err);
     }
 
     if (!clean) {

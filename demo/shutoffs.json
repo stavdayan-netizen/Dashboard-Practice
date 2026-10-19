@@ -1,0 +1,44 @@
+{
+  "schema": "shutoffs.v1",
+  "fictional": true,
+  "property_id": "recBuim4HdvIeouCI",
+  "note": "Shutoff records for the fictional demo property. Locations and instructions are invented for testing. Two records are deliberately incomplete (gas location unknown, electrical instructions not approved for tenants) so the future agent can be tested on not inventing safety information.",
+  "records": [
+    {
+      "id": "sh-hv-water", "kind": "Water",
+      "exact_location": "Basement, north wall, beside the water heater",
+      "description": "Main water shutoff valve",
+      "tenant_instructions": "Turn the valve handle a quarter turn so it sits across the pipe, then call the property manager.",
+      "tenant_instructions_approved": true,
+      "attachments": { "photos": [] },
+      "information_status": "Verified", "visibility": "Tenant Accessible"
+    },
+    {
+      "id": "sh-hv-gas", "kind": "Gas",
+      "exact_location": null,
+      "description": null,
+      "tenant_instructions": null,
+      "tenant_instructions_approved": false,
+      "attachments": { "photos": [] },
+      "information_status": "Unknown", "visibility": "Internal Only"
+    },
+    {
+      "id": "sh-hv-electric", "kind": "Electrical panel / main breaker",
+      "exact_location": "Basement, east wall, inside the electrical panel",
+      "description": "Main breaker",
+      "tenant_instructions": null,
+      "tenant_instructions_approved": false,
+      "attachments": { "photos": [] },
+      "information_status": "Estimated", "visibility": "Internal Only"
+    },
+    {
+      "id": "sh-hv-other", "kind": "Other safety device",
+      "exact_location": "Basement utility room, exact position not yet confirmed",
+      "description": "Water heater gas supply valve",
+      "tenant_instructions": null,
+      "tenant_instructions_approved": false,
+      "attachments": { "photos": [] },
+      "information_status": "Estimated", "visibility": "Internal Only"
+    }
+  ]
+}

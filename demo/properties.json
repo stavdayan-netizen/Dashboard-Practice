@@ -1,0 +1,15 @@
+{
+  "schema": "properties.v1",
+  "fictional": true,
+  "note": "Demo copy of the Airtable Properties record for 10 Harbor View. Read from Airtable once; nothing here is written back.",
+  "records": [
+    {
+      "id": "recBuim4HdvIeouCI",
+      "name": "10 Harbor View",
+      "city": "Holtwood",
+      "state": "PA",
+      "zip": "17532",
+      "full_address": "10 Harbor View, Holtwood, PA 17532"
+    }
+  ]
+}

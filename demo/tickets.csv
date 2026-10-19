@@ -1,0 +1,26 @@
+id,date_created,property,tenant,issue,category,priority,status,assigned_to,date_resolved,cost,cost_date,ai_summary
+DEMO-1,2026-09-15,10 Harbor View,Jamie Ross,Bathroom light won't turn on,Electrical,Medium,New,,,,,Switch or bulb likely failed; awaiting assignment.
+DEMO-4,2026-06-14,10 Harbor View,Drew Falk,Dryer not spinning,Appliance,Medium,Resolved,Metro Appliance Repair,2026-06-16,95,2026-06-16,Belt replaced; dryer tested and working.
+DEMO-7,2026-09-05,10 Harbor View,Logan Pierce,Kitchen sink drain clogged,Plumbing,High,Scheduled,Sample Plumbing Co,,,,Drain likely blocked; plumber scheduled this week.
+DEMO-8,2026-09-18,10 Harbor View,Harper Voss,No AC airflow from vents,HVAC,Urgent,New,,,,,No airflow reported; dispatch HVAC tech same day.
+DEMO-9,2026-03-10,10 Harbor View,Elliot Cruz,Closet door hinge squeaking,Doors & Locks,Low,Resolved,Ace Locksmiths,2026-03-12,20,2026-03-12,Hinge lubricated; squeak resolved.
+DEMO-10,2026-09-02,10 Harbor View,Quinn Bailey,Hallway carpet fraying at edge,General,Medium,In Progress,Cedar Maintenance Team,,30,2026-09-03,Edge trim ordered; repair in progress.
+DEMO-11,2026-09-19,10 Harbor View,Sage Whitfield,Breaker panel buzzing loudly,Electrical,Urgent,In Progress,Bright Spark Electric,,,,Possible loose connection; electrician on site.
+DEMO-12,2026-07-01,10 Harbor View,Rowan Ellis,Freezer not sealing properly,Appliance,Low,Resolved,Metro Appliance Repair,2026-07-03,0,2026-07-03,Gasket realigned; no charge under warranty.
+DEMO-13,2026-09-08,10 Harbor View,Blake Sutton,Toilet running continuously,Plumbing,Medium,Resolved,Sample Plumbing Co,2026-09-10,60,2026-09-10,Flapper valve replaced; issue resolved.
+DEMO-14,2026-08-25,10 Harbor View,Marlowe Dean,Thermostat display blank,HVAC,High,Scheduled,Comfort Air Services,,,,Thermostat likely needs replacement; tech scheduled.
+DEMO-15,2026-09-21,10 Harbor View,Tatum Reyes,Balcony door won't slide,Doors & Locks,Medium,New,,,,,Track may be obstructed; awaiting assignment.
+DEMO-16,2026-01-15,10 Harbor View,Finley Ward,Mailroom light burned out,General,Low,Resolved,Cedar Maintenance Team,2026-01-17,15,2026-01-17,Bulb replaced; resolved same visit.
+HV-001,2025-04-10,10 Harbor View,Nora Whitcomb,Dishwasher not draining at end of cycle,Appliance,Medium,Resolved,Metro Appliance Repair,2025-04-14,140,2025-04-14,Drain hose clog cleared; cycle tested.
+HV-002,2025-06-02,10 Harbor View,Nora Whitcomb,Hot water runs out quickly,Plumbing,High,Resolved,Sample Plumbing Co,2025-06-03,85,2025-06-03,Sediment flushed from tank; hot water restored.
+HV-003,2025-08-19,10 Harbor View,Caleb Marsh,Smoke detector chirping in hallway,General,Low,Resolved,Cedar Maintenance Team,2025-08-19,0,2025-08-19,Battery replaced during the visit; no charge.
+HV-004,2025-11-05,10 Harbor View,Caleb Marsh,Furnace will not ignite,HVAC,Urgent,Resolved,Comfort Air Services,2025-11-05,210,2025-11-05,Igniter replaced; heat restored same day.
+HV-005,2025-12-12,10 Harbor View,Imani Doyle,Kitchen faucet dripping,Plumbing,Low,Resolved,Sample Plumbing Co,2025-12-15,55,2025-12-15,Cartridge replaced; drip stopped.
+HV-006,2026-02-03,10 Harbor View,Imani Doyle,Ice maker not producing ice,Appliance,Medium,Resolved,Metro Appliance Repair,2026-02-06,120,2026-02-06,Water inlet valve replaced; ice production tested.
+HV-007,2026-04-22,10 Harbor View,Imani Doyle,Range burner will not light,Appliance,High,Resolved,Metro Appliance Repair,2026-04-24,95,2026-04-24,Burner igniter replaced; all burners tested.
+HV-008,2026-05-30,10 Harbor View,Elliot Cruz,Air conditioning not cooling,HVAC,High,Resolved,Comfort Air Services,2026-06-02,175,2026-06-02,Low refrigerant topped up; leak check clear.
+HV-009,2026-08-03,10 Harbor View,Rowan Ellis,Water dripping from water heater relief valve,Plumbing,Urgent,Resolved,Sample Plumbing Co,2026-08-04,160,2026-08-04,Relief valve replaced; tank pressure checked.
+HV-010,2026-09-27,10 Harbor View,Rowan Ellis,Dishwasher leaking at the door seal,Appliance,High,In Progress,Metro Appliance Repair,,,,Door gasket on order; tenant advised to avoid using it.
+HV-011,2026-10-02,10 Harbor View,Harper Voss,Smoke detector battery low,General,Low,Resolved,Cedar Maintenance Team,2026-10-08,12,2026-10-08,Batteries replaced in all detectors.
+HV-012,2026-10-06,10 Harbor View,Tatum Reyes,Washer shakes loudly during spin cycle,Appliance,Medium,Resolved,Cedar Maintenance Team,2026-10-14,0,2026-10-14,Machine leveled; tenant-owned washer so no repair cost.
+HV-013,2026-10-16,10 Harbor View,Jamie Ross,Front door lock sticking,Doors & Locks,Medium,New,,,,,Key turns with difficulty; awaiting assignment.

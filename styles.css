@@ -120,6 +120,23 @@ a:focus-visible,
   color: #5b6472;
 }
 
+.data-source-badge--demo {
+  background: #ece6fb;
+  color: #5c4a9a;
+}
+
+/* Shown only in demo mode (?demo=1): a reminder that nothing here is real. */
+.demo-note {
+  width: min(1200px, calc(100% - 2 * clamp(16px, 4vw, 40px)));
+  margin: 16px auto 0;
+  padding: 10px 16px;
+  background: #f1ecfd;
+  border: 1px solid #d9cff5;
+  border-radius: 10px;
+  color: #4d3f85;
+  font-size: 0.85rem;
+}
+
 .header-controls {
   display: flex;
   flex-wrap: wrap;

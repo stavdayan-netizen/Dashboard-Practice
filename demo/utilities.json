@@ -1,0 +1,38 @@
+{
+  "schema": "utilities.v1",
+  "fictional": true,
+  "property_id": "recBuim4HdvIeouCI",
+  "note": "One record per utility. Providers, phones and websites are invented (phones use 555-01xx, sites use example.com). The five records cover the special cases from the spec: water in the landlord's name billed to the tenant, sewer included in water, trash included in property taxes.",
+  "records": [
+    {
+      "id": "ut-hv-gas", "utility": "Gas",
+      "provider_name": "Susquehanna Gas & Heat", "provider_phone": "555-0111", "emergency_phone": "555-0112", "website": "https://example.com/gas",
+      "account_holder": "Tenant", "responsible_payer": "Tenant", "billing_arrangement": "Direct Tenant Billing", "included_with": null,
+      "notes": "", "information_status": "Estimated", "visibility": "Tenant Accessible"
+    },
+    {
+      "id": "ut-hv-electric", "utility": "Electric",
+      "provider_name": "Conestoga Power Co.", "provider_phone": "555-0121", "emergency_phone": "555-0122", "website": "https://example.com/electric",
+      "account_holder": "Tenant", "responsible_payer": "Tenant", "billing_arrangement": "Direct Tenant Billing", "included_with": null,
+      "notes": "", "information_status": "Verified", "visibility": "Tenant Accessible"
+    },
+    {
+      "id": "ut-hv-water", "utility": "Water",
+      "provider_name": "Holtwood Water Authority", "provider_phone": "555-0131", "emergency_phone": "555-0132", "website": "https://example.com/water",
+      "account_holder": "Landlord", "responsible_payer": "Tenant", "billing_arrangement": "Owner Pays & Bills Tenant", "included_with": null,
+      "notes": "The account stays in the landlord's name; the tenant is billed by the landlord each quarter.", "information_status": "Verified", "visibility": "Tenant Accessible"
+    },
+    {
+      "id": "ut-hv-sewer", "utility": "Sewer",
+      "provider_name": "Holtwood Water Authority", "provider_phone": null, "emergency_phone": null, "website": null,
+      "account_holder": "Landlord", "responsible_payer": "Tenant", "billing_arrangement": "Included in Another Utility", "included_with": "Water",
+      "notes": "Sewer is part of the water bill.", "information_status": "Verified", "visibility": "Tenant Accessible"
+    },
+    {
+      "id": "ut-hv-trash", "utility": "Trash",
+      "provider_name": "Lancaster County Waste", "provider_phone": "555-0141", "emergency_phone": null, "website": "https://example.com/waste",
+      "account_holder": "Other", "responsible_payer": "Landlord", "billing_arrangement": "Included in Property Taxes", "included_with": null,
+      "notes": "Collected through the municipality; no separate bill.", "information_status": "Estimated", "visibility": "Tenant Accessible"
+    }
+  ]
+}

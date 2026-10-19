@@ -108,6 +108,12 @@ How it works (all in `app.js`, no API keys, and it works on the public GitHub Pa
 
 The thresholds live in `alertsForDay()` in `app.js`. The section needs each property's full address, so it shows a short notice instead of cards when the data comes from the sample CSV or an uploaded CSV (those rows have no address).
 
+## Demo mode (`?demo=1`)
+
+Add `?demo=1` to the dashboard address (for example `http://localhost:8531/?demo=1`) to see a fully fictional demo for **10 Harbor View**. It reads the files in `demo/` instead of Airtable: 25 fictional tickets, the property's address (so the weather section works), and a badge and note saying the data is fictional. Nothing is read from or written to Airtable, the real data is untouched, and without `?demo=1` the dashboard behaves exactly as before. Like Vendor Research, it needs a web server, not a file opened directly.
+
+The `demo/` folder also holds fictional equipment, equipment history, utilities and shutoff records for the upcoming Systems & Equipment views and the AI Maintenance Agent tests. They are not shown in the dashboard yet. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
+
 ## Tenant Maintenance Portal (`tenant.html`)
 
 A separate, phone-friendly page where a tenant reports a problem. It is not linked from the dashboard and the dashboard code is unchanged. It is published with the rest of the project on GitHub Pages at **https://stavdayan-netizen.github.io/Dashboard-Practice/tenant.html** (every push to `master` updates it), and also works from a local server (`http://localhost:8531/tenant.html`).

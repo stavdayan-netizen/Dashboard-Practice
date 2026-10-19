@@ -19,6 +19,10 @@ $mime = @{
     ".csv"  = "text/csv; charset=utf-8"
     ".json" = "application/json; charset=utf-8"
     ".ps1"  = "text/plain; charset=utf-8"
+    ".svg"  = "image/svg+xml"
+    ".png"  = "image/png"
+    ".jpg"  = "image/jpeg"
+    ".pdf"  = "application/pdf"
 }
 
 function Get-ApifyToken {
