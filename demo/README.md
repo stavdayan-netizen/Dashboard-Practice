@@ -13,7 +13,7 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 | --- | --- | --- |
 | `properties.json` | The one property (copied from Airtable, read-only) | Dashboard demo mode (address for weather) |
 | `tickets.csv` | 30 tickets in the standard 13-column format (13 open, 17 resolved or closed), using all seven demo statuses | Dashboard demo mode, same validation as every other source |
-| `ticket_details.json` | Extra fields per ticket: emergency flag, AI handling status, internal notes, vendor brief, **equipment links** and attachments | Ticket details, equipment history, agent |
+| `ticket_details.json` | Extra fields per ticket: emergency flag, AI handling status, internal notes, vendor brief, repair date and summary, **receipts**, **equipment links** and attachments | Ticket details, equipment history, agent |
 | `equipment.json` | 22 equipment records across the planned categories | Systems & Equipment view, agent |
 | `equipment_history.json` | 7 manual events that have **no ticket** (purchases, installations, inspections) | Equipment history |
 | `utilities.json` | Gas, Electric, Water, Sewer, Trash | Systems & Equipment, agent |
@@ -24,6 +24,9 @@ Every JSON file is `{ "schema": ..., "fictional": true, "records": [...] }`. `nu
 
 ## Editing in demo mode
 The Systems & Equipment view (`systems.js`) reads these files once, then keeps all edits in the browser's localStorage under `dashboardPractice.demoSystems.v1`. Ticket edits (status, priority, emergency flag, AI handling status, notes, vendor brief, equipment links) are kept separately under `dashboardPractice.demoTickets.v1`; "Reset demo ticket edits" in the dashboard clears them. The files in this folder are never modified. "Reset demo data" in the view clears that key and reloads the original files. Files added in the view are stored there as small data URLs (up to 300 KB each).
+
+## Receipts and invoices
+Receipts belong to the **ticket**: `receipts` in `ticket_details.json` holds durable references (`id`, `filename`, `mime`, `size`). Two tickets ship with fictional seeded receipts that point at static files in `demo/files/` through a `path` (`HV-009` has a PDF invoice and a PNG parts receipt, `HV-006` a PNG receipt). Receipts a manager uploads in the demo are stored in the browser's **IndexedDB** (database `dashboardPractice.demoReceipts`), not in localStorage, and the ticket keeps only the reference. Equipment history links to those references and never copies the files. The files stay in this browser only and disappear if the browser data is cleared; "Reset demo ticket edits" deletes them. Servicing company, cost and cost date are the ticket's existing Assigned To, cost and cost date; `repair_date` and `repair_summary` are new per-ticket fields.
 
 ## What the demo data deliberately contains
 - Complete, partial and empty equipment records. `Not Provided` (microwave, CO detector) means the information is unknown, not that the item is absent. `No` (garbage disposal, garage) means absent.

@@ -1,30 +1,44 @@
 {
-  "schema": "ticket_details.v1",
+  "schema": "ticket_details.v2",
   "fictional": true,
   "property_id": "recBuim4HdvIeouCI",
-  "note": "Extra fields for the tickets in demo/tickets.csv, keyed by ticket id. Defaults when a key is missing: emergency_flag false, ai_handling_status 'Not Started', vendor_brief '', notes '', equipment_ids [], attachments []. The ticket is the single source of truth for linked repairs: equipment_ids says which equipment a ticket is about, and equipment history is built from those tickets (vendor, cost, summary and status are never copied).",
+  "note": "Extra fields for the tickets in demo/tickets.csv, keyed by ticket id. Defaults when a key is missing: emergency_flag false, ai_handling_status 'Not Started', vendor_brief '', notes '', repair_date '', repair_summary '', equipment_ids [], attachments [], receipts []. The ticket is the single source of truth for linked repairs: the servicing company is the ticket's Assigned To, the cost and cost date are the ticket's, and repair_date, repair_summary and receipts live here with the ticket. Equipment history is built from the tickets whose equipment_ids include an item and only references these fields (nothing is copied). A receipt is a durable reference (id, filename, mime, size); seeded demo receipts also carry a file path, files added in the demo are stored in the browser (IndexedDB) under their id.",
   "records": {
     "DEMO-1": { "ai_handling_status": "Failed" },
-    "DEMO-4": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed" },
+    "DEMO-4": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed", "repair_date": "2026-06-16", "repair_summary": "Replaced the drive belt and tested the dryer." },
     "DEMO-7": { "equipment_ids": ["eq-hv-kitchen-drain"] },
     "DEMO-8": { "equipment_ids": ["eq-hv-central-air"], "ai_handling_status": "Analyzing" },
     "DEMO-9": {},
     "DEMO-10": {},
     "DEMO-11": { "equipment_ids": ["eq-hv-panel"], "emergency_flag": true, "ai_handling_status": "Escalated", "notes": "Electrician on site; the panel was buzzing under load." },
-    "DEMO-12": { "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed", "notes": "Covered by the extended parts warranty." },
-    "DEMO-13": { "equipment_ids": ["eq-hv-toilet"], "ai_handling_status": "Completed" },
+    "DEMO-12": { "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed", "notes": "Covered by the extended parts warranty.", "repair_date": "2026-07-03", "repair_summary": "Realigned the freezer door gasket under the extended warranty." },
+    "DEMO-13": { "equipment_ids": ["eq-hv-toilet"], "ai_handling_status": "Completed", "repair_date": "2026-09-10", "repair_summary": "Replaced the toilet flapper valve." },
     "DEMO-14": { "equipment_ids": ["eq-hv-thermostat"] },
     "DEMO-15": { "equipment_ids": ["eq-hv-balcony-door"] },
     "DEMO-16": {},
-    "HV-001": { "equipment_ids": ["eq-hv-dishwasher"], "ai_handling_status": "Completed" },
-    "HV-002": { "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed" },
+    "HV-001": { "equipment_ids": ["eq-hv-dishwasher"], "ai_handling_status": "Completed", "repair_date": "2025-04-14", "repair_summary": "Cleared a clogged drain hose and ran a full cycle to confirm." },
+    "HV-002": { "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed", "repair_date": "2025-06-03", "repair_summary": "Flushed sediment from the tank; hot water restored." },
     "HV-003": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Completed" },
-    "HV-004": { "equipment_ids": ["eq-hv-furnace"], "emergency_flag": true, "ai_handling_status": "Completed", "notes": "No heat in November; same-day igniter replacement." },
-    "HV-005": { "equipment_ids": ["eq-hv-kitchen-faucet"], "ai_handling_status": "Completed" },
-    "HV-006": { "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed" },
-    "HV-007": { "equipment_ids": ["eq-hv-range"], "ai_handling_status": "Completed" },
-    "HV-008": { "equipment_ids": ["eq-hv-central-air"], "ai_handling_status": "Completed" },
-    "HV-009": { "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed", "notes": "Relief valve replaced; discharge pipe checked and no further leaks found." },
+    "HV-004": { "equipment_ids": ["eq-hv-furnace"], "emergency_flag": true, "ai_handling_status": "Completed", "notes": "No heat in November; same-day igniter replacement.", "repair_date": "2025-11-05", "repair_summary": "Replaced the hot-surface igniter and ran a full heating cycle; heat restored." },
+    "HV-005": { "equipment_ids": ["eq-hv-kitchen-faucet"], "ai_handling_status": "Completed", "repair_date": "2025-12-15", "repair_summary": "Replaced the faucet cartridge." },
+    "HV-006": {
+      "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed",
+      "repair_date": "2026-02-06", "repair_summary": "Replaced the water inlet valve and tested ice production over two cycles.",
+      "receipts": [
+        { "id": "demo-rcpt-hv006-receipt", "filename": "receipt-HV-006.png", "mime": "image/png", "size": 7636, "path": "demo/files/receipt-HV-006.png" }
+      ]
+    },
+    "HV-007": { "equipment_ids": ["eq-hv-range"], "ai_handling_status": "Completed", "repair_date": "2026-04-24", "repair_summary": "Replaced the burner igniter; all four burners tested." },
+    "HV-008": { "equipment_ids": ["eq-hv-central-air"], "ai_handling_status": "Completed", "repair_date": "2026-06-01", "repair_summary": "Leak check found no leak; topped up refrigerant and tested cooling." },
+    "HV-009": {
+      "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed",
+      "notes": "Relief valve replaced; discharge pipe checked and no further leaks found.",
+      "repair_date": "2026-08-04", "repair_summary": "Replaced the relief valve, checked tank pressure and the discharge pipe; no further leaks.",
+      "receipts": [
+        { "id": "demo-rcpt-hv009-invoice", "filename": "invoice-HV-009.pdf", "mime": "application/pdf", "size": 983, "path": "demo/files/invoice-HV-009.pdf" },
+        { "id": "demo-rcpt-hv009-parts", "filename": "receipt-HV-009-parts.png", "mime": "image/png", "size": 8207, "path": "demo/files/receipt-HV-009-parts.png" }
+      ]
+    },
     "HV-010": { "equipment_ids": ["eq-hv-dishwasher"], "ai_handling_status": "Waiting for Tenant", "notes": "Gasket on order; tenant is not using the dishwasher until it is fixed." },
     "HV-011": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Completed" },
     "HV-012": { "equipment_ids": ["eq-hv-washer"], "ai_handling_status": "Completed" },
@@ -48,7 +62,7 @@
       ]
     },
     "HV-016": {},
-    "HV-017": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed", "notes": "Vent duct cleaned and lint trap deep-cleaned." },
+    "HV-017": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed", "notes": "Vent duct cleaned and lint trap deep-cleaned.", "repair_date": "2026-10-06", "repair_summary": "Cleared the vent duct and cleaned the lint trap." },
     "HV-018": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Analyzing" }
   }
 }

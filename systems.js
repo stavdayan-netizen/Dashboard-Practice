@@ -648,29 +648,35 @@
   //  - tickets linked to it (the ticket is the single source of truth, so the date, summary,
   //    vendor, cost and status are read from the ticket and never copied), and
   //  - manual events with no ticket (purchases, installations, inspections), stored here.
+  // The date shown for a ticket entry: the repair date when one is recorded, otherwise when it was finished or reported.
+  const ticketDate = (t) => (t.demo && t.demo.repair_date) || t.date_resolved || t.date_created;
+
   function historyEntries(rec) {
-    const entries = linkedTickets(rec.id).map((t) => ({ kind: "ticket", date: t.date_resolved || t.date_created, ticket: t }));
+    const entries = linkedTickets(rec.id).map((t) => ({ kind: "ticket", date: ticketDate(t), ticket: t }));
     data.history.filter((h) => h.equipment_id === rec.id && !h.ticket_id).forEach((ev) => entries.push({ kind: "manual", date: ev.date, event: ev }));
     return entries.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   }
 
   function ticketEntry(t) {
     const manager = isManager();
+    const d = t.demo || {};
     const li = el("li", "sys-event");
     const dateCol = el("span", "sys-event-date");
-    dateCol.appendChild(document.createTextNode(fmtDate(t.date_resolved || t.date_created)));
-    dateCol.appendChild(el("span", "sys-event-datelabel", t.date_resolved ? (t.status === "Closed" ? "Closed" : "Resolved") : "Reported"));
+    dateCol.appendChild(document.createTextNode(fmtDate(ticketDate(t))));
+    dateCol.appendChild(el("span", "sys-event-datelabel", d.repair_date ? "Repaired" : (t.date_resolved ? (t.status === "Closed" ? "Closed" : "Resolved") : "Reported")));
     li.appendChild(dateCol);
 
     // Managers can open the ticket; the ticket detail view is an internal screen, so the tenant preview shows plain text.
+    const main = el("div", "sys-event-main");
     const body = manager ? el("button", "sys-event-btn") : el("div");
     if (manager) {
       body.type = "button";
       body.setAttribute("aria-label", "Open ticket " + t.id + ": " + t.issue);
       body.addEventListener("click", () => { if (dash()) dash().openTicket(t.id, body); });
     }
+    const summary = d.repair_summary || t.ai_summary;
     body.appendChild(el("span", "sys-event-title", t.issue));
-    body.appendChild(el("span", "sys-event-summary" + (t.ai_summary ? "" : " sys-empty"), t.ai_summary || "No repair summary recorded."));
+    body.appendChild(el("span", "sys-event-summary" + (summary ? "" : " sys-empty"), summary || "No repair summary recorded."));
     const meta = el("span", "sys-event-meta");
     meta.appendChild(dash() ? dash().statusBadge(t.status) : badge(t.status, "muted"));
     meta.appendChild(el("span", null, "Ticket " + t.id));
@@ -679,7 +685,32 @@
       meta.appendChild(el("span", typeof t.cost === "number" ? null : "sys-empty", typeof t.cost === "number" ? money(t.cost) : "Cost not recorded"));
     }
     body.appendChild(meta);
-    li.appendChild(body);
+    main.appendChild(body);
+
+    // Receipts live on the ticket; this only shows links to them (never a copy). They are
+    // manager-only, so the tenant preview leaves them out.
+    const receipts = manager ? (d.receipts || []) : [];
+    if (receipts.length && window.ReceiptStore) {
+      const row = el("div", "sys-receipts");
+      const status = el("span", "sys-receipt-status");
+      status.setAttribute("role", "status");
+      row.appendChild(el("span", "sys-receipts-label", "Receipts:"));
+      receipts.forEach((ref) => {
+        const chip = el("button", "sys-receipt-chip", ref.filename);
+        chip.type = "button";
+        chip.title = "Open " + ref.filename;
+        chip.setAttribute("aria-label", "Open receipt " + ref.filename + " for ticket " + t.id);
+        chip.addEventListener("click", () => {
+          window.ReceiptStore.view(ref).then(() => { status.textContent = ""; }, (err) => { status.textContent = err.message; });
+        });
+        row.appendChild(chip);
+      });
+      row.appendChild(status);
+      main.appendChild(row);
+    } else if (manager && t.status !== "New" && (t.date_resolved || d.repair_date)) {
+      main.appendChild(el("div", "sys-receipts sys-empty", "No receipts uploaded."));
+    }
+    li.appendChild(main);
     return li;
   }
 

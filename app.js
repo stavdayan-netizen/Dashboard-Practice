@@ -642,7 +642,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     const d = row.demo || {};
     const equipment = window.SystemsDemo && window.SystemsDemo.equipmentLabels ? window.SystemsDemo.equipmentLabels(d.equipment_ids || []) : [];
     return [row.id, row.issue, row.category, row.priority, row.status, row.assigned_to, row.ai_summary,
-      d.notes, d.vendor_brief, d.ai_handling_status, d.emergency_flag ? "emergency" : "", equipment.join(" ")]
+      d.notes, d.vendor_brief, d.repair_summary, (d.receipts || []).map((r) => r.filename).join(" "),
+      d.ai_handling_status, d.emergency_flag ? "emergency" : "", equipment.join(" ")]
       .filter(Boolean).join(" ").toLowerCase();
   }
 
@@ -2474,6 +2475,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   let demoDetails = {}; // ticket id -> extra fields from demo/ticket_details.json
   let demoOverrides = { version: 1, tickets: {} };
   const demoListeners = [];
+  const demoResetHooks = [];
   const cloneJson = (o) => JSON.parse(JSON.stringify(o));
 
   function readDemoOverrides() {
@@ -2489,7 +2491,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   }
 
   function demoExtrasFor(id) {
-    const defaults = { emergency_flag: false, ai_handling_status: "Not Started", vendor_brief: "", notes: "", equipment_ids: [], attachments: [] };
+    const defaults = {
+      emergency_flag: false, ai_handling_status: "Not Started", vendor_brief: "", notes: "",
+      repair_date: "", repair_summary: "", equipment_ids: [], attachments: [], receipts: []
+    };
     const saved = (demoOverrides.tickets[id] || {}).demo;
     return Object.assign(defaults, cloneJson(demoDetails[id] || {}), saved ? cloneJson(saved) : {});
   }
@@ -2525,6 +2530,16 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     };
     const result = validateRows([raw]);
     if (result.errors.length) return { ok: false, error: result.errors[0].replace(/^row \d+ \([^)]*\): /, "") };
+    // The repair date (when the servicing company did the work) must sit between the
+    // ticket's created date and today, and not after the resolved date.
+    const repairDate = patch && patch.demo && patch.demo.repair_date !== undefined ? patch.demo.repair_date : (row.demo || {}).repair_date;
+    if (repairDate) {
+      const resolved = result.clean[0].date_resolved;
+      if (!isIsoDate(repairDate)) return { ok: false, error: "The repair date isn't a valid date." };
+      if (repairDate < result.clean[0].date_created) return { ok: false, error: "The repair date can't be before the ticket was created." };
+      if (repairDate > AS_OF_DATE) return { ok: false, error: "The repair date can't be in the future." };
+      if (resolved && repairDate > resolved) return { ok: false, error: "The repair date can't be after the date resolved." };
+    }
     Object.assign(row, result.clean[0]);
     if (patch && patch.demo) row.demo = Object.assign({}, row.demo || {}, cloneJson(patch.demo));
     demoOverrides.tickets[id] = {
@@ -2555,7 +2570,12 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       closeTicket: () => { document.getElementById("dialog-overlay").hidden = true; document.removeEventListener("keydown", onDialogKeydown, true); },
       updateTicket: demoUpdateTicket,
       refresh: () => { if (state.rows.length) renderAll(); },
-      resetTickets: () => { try { localStorage.removeItem(DEMO_TICKET_STORE); } catch (err) { /* ignore */ } location.reload(); },
+      // Clears the ticket edits, and any hook-registered data (the stored receipt files), then reloads.
+      resetTickets: () => {
+        try { localStorage.removeItem(DEMO_TICKET_STORE); } catch (err) { /* ignore */ }
+        Promise.all(demoResetHooks.map((h) => { try { return h(); } catch (err) { return null; } })).then(() => location.reload(), () => location.reload());
+      },
+      onReset: (cb) => { demoResetHooks.push(cb); },
       onChange: (cb) => { demoListeners.push(cb); },
       lists: { statuses: STATUSES.slice(), closedStatuses: CLOSED_STATUSES.slice(), priorities: PRIORITIES.slice(), categories: CATEGORIES.slice(), aiStatuses: AI_HANDLING_STATUSES.slice() },
       asOfDate: () => AS_OF_DATE,

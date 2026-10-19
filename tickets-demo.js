@@ -29,6 +29,54 @@
 
   function emergencyBadge() { return el("span", "badge badge-emergency", "Emergency"); }
 
+  // ---- Receipts and invoices (manager only) -------------------------------
+
+  const store = () => window.ReceiptStore;
+
+  function linkButton(text, label, onClick) {
+    const b = el("button", "sys-link-btn", text);
+    b.type = "button";
+    b.setAttribute("aria-label", label);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  // One receipt line: file name, size and the buttons the caller supplies.
+  function receiptLine(name, size, buttons, note) {
+    const li = el("li", "receipt-line");
+    li.appendChild(el("span", "receipt-name", name));
+    li.appendChild(el("span", "receipt-size", store().formatSize(size || 0) + (note ? " · " + note : "")));
+    const actions = el("span", "receipt-actions");
+    buttons.forEach((b) => actions.appendChild(b));
+    li.appendChild(actions);
+    return li;
+  }
+
+  // View and Download for a saved receipt. Errors (for example a file that is no longer in this browser) show in statusEl.
+  function savedReceiptButtons(ref, statusEl) {
+    const guard = (promise) => promise.then(() => { statusEl.textContent = ""; }, (err) => { statusEl.textContent = err.message; });
+    return [
+      linkButton("View", "View " + ref.filename, () => guard(store().view(ref))),
+      linkButton("Download", "Download " + ref.filename, () => guard(store().download(ref)))
+    ];
+  }
+
+  function receiptsView(row) {
+    const refs = (row.demo && row.demo.receipts) || [];
+    const wrap = el("div");
+    wrap.appendChild(el("div", "receipt-privacy", "Receipts and invoices are manager only. They are hidden from the tenant preview."));
+    if (!refs.length) {
+      wrap.appendChild(el("span", "sys-empty", "No receipts or invoices uploaded."));
+      return wrap;
+    }
+    const status = el("p", "ticket-brief-status");
+    status.setAttribute("role", "status");
+    const list = el("ul", "receipt-list");
+    refs.forEach((ref) => list.appendChild(receiptLine(ref.filename, ref.size, savedReceiptButtons(ref, status))));
+    wrap.append(list, status);
+    return wrap;
+  }
+
   // ---- Copy to clipboard -------------------------------------------------
 
   async function copyText(textarea, statusEl) {
@@ -106,11 +154,15 @@
   function decorate(row, body, titleEl) {
     const demo = row.demo || {};
     document.getElementById("request-dialog").classList.add("dialog-wide"); // room for the longer demo details
+    body.classList.add("demo-ticket"); // lets the demo layout stack labels above values on a phone
     if (demo.emergency_flag) titleEl.appendChild(emergencyBadge());
 
     addRow(body, "Emergency flag", demo.emergency_flag ? "Yes" : "No");
-    addRow(body, "AI handling status (internal)", demo.ai_handling_status || "Not Started");
+    addRow(body, "AI handling", demo.ai_handling_status || "Not Started");
     addRow(body, "Internal notes", demo.notes ? demo.notes : "-");
+    addRow(body, "Repair date", demo.repair_date ? dash().formatDate(demo.repair_date) : "Not recorded");
+    addRow(body, "Repair summary", demo.repair_summary ? demo.repair_summary : "Not recorded");
+    addRow(body, "Receipts", receiptsView(row));
     addRow(body, "Linked equipment", equipmentLinks(row));
     addRow(body, "Attachments", attachmentsView(row));
     vendorBriefBlock(body, row);
@@ -164,7 +216,7 @@
     field("priority", "Priority", "select", { options: lists.priorities, value: row.priority });
     field("status", "Status", "select", { options: lists.statuses, value: row.status });
     field("ai", "AI handling status (internal)", "select", { options: lists.aiStatuses, value: demo.ai_handling_status || "Not Started" });
-    field("assigned", "Assigned to", "text", { value: row.assigned_to || "" });
+    field("assigned", "Assigned to (servicing company)", "text", { value: row.assigned_to || "" });
 
     const emergencyWrap = el("label", "form-field sys-checkbox ticket-check");
     const emergency = document.createElement("input");
@@ -176,6 +228,64 @@
     const resolvedWrap = field("resolved", "Date resolved", "date", { value: row.date_resolved || "" });
     field("cost", "Actual cost (optional)", "number", { value: row.cost === null ? "" : row.cost });
     const costDateWrap = field("costDate", "Cost date", "date", { value: row.cost_date || "" });
+
+    // Repair details: the servicing company is "Assigned to" and the cost is the ticket's cost
+    // above; the repair date, summary and receipts are stored on this ticket too.
+    const repairHeading = el("div", "ticket-section-title form-field-wide", "Repair details and receipts");
+    grid.appendChild(repairHeading);
+    field("repairDate", "Repair date", "date", { value: demo.repair_date || "" });
+    field("repairSummary", "Repair summary", "textarea", { value: demo.repair_summary || "", wide: true, rows: 3 });
+
+    // Receipts are staged here and only written (or deleted) when the form is saved.
+    const staged = { kept: (demo.receipts || []).map((r) => Object.assign({}, r)), adds: [], removed: [] };
+    const rcptWrap = el("div", "form-field form-field-wide receipt-editor");
+    rcptWrap.appendChild(el("span", null, "Receipts and invoices (PDF or images, manager only)"));
+    const rcptList = el("ul", "receipt-list");
+    const rcptStatus = el("p", "ticket-brief-status");
+    rcptStatus.setAttribute("role", "status");
+    const rcptInput = document.createElement("input");
+    rcptInput.type = "file";
+    rcptInput.multiple = true;
+    rcptInput.accept = store().ACCEPT;
+    rcptInput.setAttribute("aria-label", "Add receipts or invoices");
+    const rcptHelp = el("span", "receipt-help", "Up to " + store().MAX_PER_TICKET + " files, " + (store().MAX_BYTES / 1048576) + " MB each. Saved in this browser only (demo).");
+    rcptWrap.append(rcptList, rcptInput, rcptHelp, rcptStatus);
+    grid.appendChild(rcptWrap);
+    store().available().then((ok) => {
+      if (!ok) { rcptInput.disabled = true; rcptStatus.textContent = "This browser can't store files right now (for example a private window), so receipts can't be added."; }
+    });
+
+    function drawReceipts() {
+      clear(rcptList);
+      if (!staged.kept.length && !staged.adds.length) rcptList.appendChild(el("li", "sys-empty", "No receipts or invoices yet."));
+      staged.kept.forEach((ref, i) => {
+        const buttons = savedReceiptButtons(ref, rcptStatus);
+        buttons.push(linkButton("Remove", "Remove " + ref.filename, () => { staged.removed.push(staged.kept.splice(i, 1)[0]); drawReceipts(); }));
+        rcptList.appendChild(receiptLine(ref.filename, ref.size, buttons));
+      });
+      staged.adds.forEach((file, i) => {
+        const buttons = [
+          linkButton("View", "View " + file.name, () => store().viewFile(file)),
+          linkButton("Download", "Download " + file.name, () => store().downloadFile(file)),
+          linkButton("Remove", "Remove " + file.name, () => { staged.adds.splice(i, 1); drawReceipts(); })
+        ];
+        rcptList.appendChild(receiptLine(file.name, file.size, buttons, "added, saved when you save the ticket"));
+      });
+    }
+    rcptInput.addEventListener("change", () => {
+      const problems = [];
+      Array.prototype.forEach.call(rcptInput.files, (file) => {
+        const bad = store().checkFile(file);
+        if (bad) { problems.push(bad); return; }
+        if (staged.kept.length + staged.adds.length >= store().MAX_PER_TICKET) { problems.push("A ticket can hold up to " + store().MAX_PER_TICKET + " receipts."); return; }
+        staged.adds.push(file);
+      });
+      rcptInput.value = "";
+      rcptStatus.textContent = problems.join(" ");
+      drawReceipts();
+    });
+    drawReceipts();
+
     field("notes", "Internal notes", "textarea", { value: demo.notes || "", wide: true });
 
     // Equipment this ticket is about. History on each item is built from these links.
@@ -236,9 +346,24 @@
     ctl.cost.addEventListener("input", syncConditional);
     syncConditional();
 
-    form.addEventListener("submit", (ev) => {
+    form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
+      error.hidden = true;
+      save.disabled = true;
       const costValue = ctl.cost.value.trim();
+      const fail = (text) => { error.textContent = text; error.hidden = false; save.disabled = false; };
+
+      // 1) store the newly added files; if one fails, undo the ones already stored
+      const added = [];
+      try {
+        for (const file of staged.adds) added.push(await store().save(file));
+      } catch (err) {
+        await Promise.all(added.map((r) => store().remove(r).catch(() => {})));
+        fail("Couldn't save the receipts: " + err.message);
+        return;
+      }
+
+      // 2) save the ticket (same validation as every other source); if it is refused, undo the stored files
       const result = dash().updateTicket(row.id, {
         fields: {
           category: ctl.category.value, priority: ctl.priority.value, status: ctl.status.value,
@@ -247,14 +372,26 @@
         },
         demo: {
           emergency_flag: emergency.checked, ai_handling_status: ctl.ai.value, notes: ctl.notes.value.trim(),
+          repair_date: ctl.repairDate.value, repair_summary: ctl.repairSummary.value.trim(),
+          receipts: staged.kept.concat(added),
           equipment_ids: checks.filter((c) => c.checked).map((c) => c.value), vendor_brief: ctl.brief.value
         }
       });
-      if (!result.ok) { error.textContent = result.error; error.hidden = false; return; }
+      if (!result.ok) {
+        await Promise.all(added.map((r) => store().remove(r).catch(() => {})));
+        fail(result.error);
+        return;
+      }
+
+      // 3) the ticket no longer points at the removed receipts, so their files can go
+      await Promise.all(staged.removed.map((r) => store().remove(r).catch(() => {})));
       showAgain();
     });
     ctl.category.focus();
   }
+
+  // "Reset demo ticket edits" also deletes the receipt files stored in this browser.
+  if (dash() && dash().onReset) dash().onReset(() => (store() ? store().clearAll() : null));
 
   window.TicketsDemo = { decorate };
 })();
