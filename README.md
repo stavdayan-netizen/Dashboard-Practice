@@ -112,7 +112,17 @@ The thresholds live in `alertsForDay()` in `app.js`. The section needs each prop
 
 Add `?demo=1` to the dashboard address (for example `http://localhost:8531/?demo=1`) to see a fully fictional demo for **10 Harbor View**. It reads the files in `demo/` instead of Airtable: 25 fictional tickets, the property's address (so the weather section works), and a badge and note saying the data is fictional. Nothing is read from or written to Airtable, the real data is untouched, and without `?demo=1` the dashboard behaves exactly as before. Like Vendor Research, it needs a web server, not a file opened directly.
 
-The `demo/` folder also holds fictional equipment, equipment history, utilities and shutoff records for the upcoming Systems & Equipment views and the AI Maintenance Agent tests. They are not shown in the dashboard yet. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
+### Systems & Equipment (demo mode only)
+
+In demo mode a **Systems & Equipment** button appears in the header. It opens a view for the property with expandable categories: Appliances, Heating & Cooling, Water Heater, Roof & Gutters, Garage & Garage Door, Electrical Panel, Plumbing & Drains, Doors/Windows/Locks, Smoke & CO Detectors, Basement & Foundation, Exterior & Landscaping, and Utilities & Shutoff Locations. Each item shows only the fields that matter for its type, with presence, ownership, information status, visibility, warranty status, photos and documents (loaded lazily), notes and a service history with costs.
+
+- **Add, edit, delete:** every category has an Add button, and items can be edited or deleted (delete needs a second click). Custom equipment types are supported, partial records are fine, and a new item starts as Internal Only with an unknown information status. Utilities (Gas, Electric, Water, Sewer, Trash) and shutoff locations have their own forms, and shutoff instructions only reach tenants when marked approved.
+- **Attachments:** photos, receipts, manuals and warranty documents can be added to an item (files up to 300 KB in this demo).
+- **Tenant preview:** a "View as" switch shows only Tenant Accessible records, hides costs, and hides edit buttons. It is a preview only; the real permission check will run on the server.
+- **Where changes go:** edits are saved in this browser (localStorage) and never sent anywhere. "Reset demo data" restores the original fictional records.
+- **Not in the real dashboard:** without `?demo=1` the button does not exist and nothing changes.
+
+The `demo/` folder holds the fictional records behind it. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
 
 ## Tenant Maintenance Portal (`tenant.html`)
 

@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="systems.css">
 </head>
 <body>
 
@@ -24,6 +25,7 @@
       <button type="button" class="btn btn-ghost" id="demo-csv-link">Download demo CSV</button>
       <button type="button" class="btn btn-secondary" id="upload-csv-btn">Upload CSV</button>
       <input type="file" id="csv-upload-input" class="visually-hidden" accept=".csv,text/csv" aria-label="Upload a CSV file of maintenance requests">
+      <button type="button" class="btn btn-secondary" id="systems-view-btn" aria-pressed="false" hidden>Systems &amp; Equipment</button>
       <button type="button" class="btn btn-secondary" id="vendor-view-btn" aria-pressed="false">Vendor Research</button>
       <button type="button" class="btn btn-primary" id="new-request-btn">+ New Request</button>
     </div>
@@ -134,6 +136,8 @@
     </div>
   </section>
 
+  <section class="systems-section" id="systems-section" aria-label="Systems and equipment"></section>
+
 </main>
 
 <div class="dialog-overlay" id="dialog-overlay" hidden>
@@ -212,9 +216,18 @@
 </div>
 <datalist id="property-datalist"></datalist>
 
+<div class="dialog-overlay" id="systems-dialog-overlay" hidden>
+  <div class="dialog systems-dialog" role="dialog" aria-modal="true" aria-labelledby="systems-dialog-title" id="systems-dialog">
+    <button class="dialog-close" id="systems-dialog-close" aria-label="Close">&times;</button>
+    <h2 id="systems-dialog-title"></h2>
+    <div id="systems-dialog-body"></div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script src="systems.js"></script>
 </body>
 </html>

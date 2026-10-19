@@ -13,13 +13,16 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 | --- | --- | --- |
 | `properties.json` | The one property (copied from Airtable, read-only) | Dashboard demo mode (address for weather) |
 | `tickets.csv` | 25 tickets in the standard 13-column format (9 open, 16 resolved) | Dashboard demo mode, same validation as every other source |
-| `equipment.json` | 21 equipment records across the planned categories | Systems & Equipment (next step), agent |
+| `equipment.json` | 21 equipment records across the planned categories | Systems & Equipment view, agent |
 | `equipment_history.json` | 28 dated events per equipment record, linked to tickets | Equipment history, agent |
 | `utilities.json` | Gas, Electric, Water, Sewer, Trash | Systems & Equipment, agent |
 | `shutoffs.json` | Water, gas, electrical and other shutoffs | Systems & Equipment, agent |
 | `files/*.svg` | Placeholder photos and documents | Attachment display |
 
 Every JSON file is `{ "schema": ..., "fictional": true, "records": [...] }`. `null` means unknown or not entered.
+
+## Editing in demo mode
+The Systems & Equipment view (`systems.js`) reads these files once, then keeps all edits in the browser's localStorage under `dashboardPractice.demoSystems.v1`. The files in this folder are never modified. "Reset demo data" in the view clears that key and reloads the original files. Files added in the view are stored there as small data URLs (up to 300 KB each).
 
 ## What the demo data deliberately contains
 - Complete, partial and empty equipment records. `Not Provided` (microwave, CO detector) means the information is unknown, not that the item is absent. `No` (garbage disposal, garage) means absent.
