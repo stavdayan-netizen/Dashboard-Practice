@@ -133,6 +133,14 @@ Also demo mode only (the real dashboard keeps its four statuses and current layo
 - **Repair details and receipts (manager only):** a ticket records the servicing company (Assigned to), repair date, cost and repair summary, and holds up to 10 receipts or invoices (PDF, PNG, JPEG, WebP or GIF, up to 5 MB each). In **Edit ticket** you can add several files at once, then **View** (opens the original), **Download** or **Remove** each one; nothing is stored until you save. The equipment history shows each linked repair's date, summary, vendor, cost, ticket and clickable receipts, and the Tenant preview hides the receipts, vendor and cost.
 - **Where changes go:** this browser only. Ticket edits are in localStorage; receipt **files** are in the browser's IndexedDB (localStorage is too small for PDFs), and the ticket keeps only a small reference to each, so the history never copies a file. Limits: files are lost if you clear the browser's site data, may not persist in a private window, and can't be seen on another device. "Reset demo ticket edits" undoes the ticket changes and deletes the stored files. No Airtable record, Make scenario or the tenant portal is touched, and no AI is connected.
 
+### Attachments on equipment history events (demo mode, manager only)
+
+**Add history event** (and **Edit event** on an existing one) records something with no ticket, such as a purchase, installation or inspection, and can hold several **photos** (images) and **receipts, invoices and other documents** (PDF or images). Each file can be viewed, downloaded and removed; files are shown right in the history entry, hidden from the Tenant preview, kept in the browser's IndexedDB so they survive a reload, and only stored when you save. Deleting an event or its equipment deletes the files.
+
+### AI agent safety rules (documentation only)
+
+The AI Maintenance Agent is not built or connected. Its emergency and safety rules (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) are written in [`agent/EMERGENCY_RULES.md`](agent/EMERGENCY_RULES.md), with twelve test scenarios, and a draft system prompt is in [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md). Nothing there needs an account or a key yet.
+
 The `demo/` folder holds the fictional records behind it. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
 
 ## Tenant Maintenance Portal (`tenant.html`)
