@@ -497,6 +497,62 @@ section h2 {
 .badge-scheduled { color: var(--color-accent-dark); background: var(--color-accent-light); }
 .badge-inprogress { color: var(--color-high); background: var(--color-high-bg); }
 
+/* Extra statuses used in demo mode (same soft pastels as the status chart). */
+.badge-awaiting { color: var(--color-medium); background: #fbf0b8; }
+.badge-schedreq { color: #5c4a9a; background: #e4d9f7; }
+.badge-closed { color: #3f5870; background: #cfd8e3; }
+
+/* Emergency flag (separate from priority). */
+.badge-emergency {
+  margin-left: 6px;
+  color: #ffffff;
+  background: var(--color-urgent);
+  border: 1px solid var(--color-urgent);
+  letter-spacing: 0.02em;
+}
+
+/* Demo mode: ticket filters above the requests table. */
+.ticket-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  margin: 0 0 14px;
+}
+
+.ticket-filters .form-field {
+  min-width: 160px;
+}
+
+.ticket-filter-search {
+  flex: 1 1 240px;
+}
+
+.ticket-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ticket-filters[hidden],
+.ticket-filters .filter-summary:empty {
+  display: none;
+}
+
+.filter-summary {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 700px) {
+  .tabs {
+    flex-wrap: wrap;
+    column-gap: 14px;
+  }
+}
+
 /* Costs section */
 
 .costs-section {

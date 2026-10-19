@@ -122,6 +122,16 @@ In demo mode a **Systems & Equipment** button appears in the header. It opens a 
 - **Where changes go:** edits are saved in this browser (localStorage) and never sent anywhere. "Reset demo data" restores the original fictional records.
 - **Not in the real dashboard:** without `?demo=1` the button does not exist and nothing changes.
 
+### Tickets in demo mode: search, statuses, equipment history
+
+Also demo mode only (the real dashboard keeps its four statuses and current layout):
+
+- **Search and filters:** a Category filter and a Search box above the tickets work together (try "bathtub", or "drain" with Plumbing), with an **All Tickets** tab so open and closed tickets are searched together, and a **Reset filters** button. The search covers titles, summaries, internal notes, the vendor brief, the vendor, and the names of linked equipment.
+- **Statuses and flags:** New, Awaiting Tenant, Scheduling Required, Scheduled, In Progress, Resolved and Closed; the existing priority plus a separate **Emergency** flag; and an internal **AI Handling Status** (Not Started, Analyzing, Waiting for Tenant, Escalated, Completed, Failed). Nothing sets the AI status automatically yet.
+- **Ticket dialog:** shows notes, attachments, linked equipment and an editable **Vendor Brief** with a **Copy brief** button, ready for a future AI-generated summary. **Edit ticket** changes the status, priority, flags, notes, equipment links and brief, with the same validation as every other source.
+- **Equipment history:** built from the tickets linked to each item, so the ticket is the single source of truth (vendor, cost, summary and status are never copied). Click an entry to open its ticket; the ticket's equipment buttons lead back. Manual events without a ticket (purchases, installations, inspections) are kept, and missing information shows as "not recorded", never invented.
+- **Where changes go:** this browser only (localStorage). "Reset demo ticket edits" undoes the ticket changes. No Airtable record, Make scenario or the tenant portal is touched, and no AI is connected.
+
 The `demo/` folder holds the fictional records behind it. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
 
 ## Tenant Maintenance Portal (`tenant.html`)

@@ -202,7 +202,6 @@
   // ---- State -------------------------------------------------------------
 
   let data = null; // { version, equipment, history, utilities, shutoffs }
-  let tickets = {}; // ticket id -> { status, issue }
   let propertyInfo = { id: "recBuim4HdvIeouCI", name: "10 Harbor View" };
   let viewAs = "manager"; // "manager" or "tenant" (preview only)
   let active = false;
@@ -221,25 +220,55 @@
     return res.json();
   }
 
+  // The tickets (and their equipment links) belong to the dashboard; this file only reads them.
+  const dash = () => window.DashboardDemo || null;
+  const ticketById = (id) => (dash() ? dash().getRow(id) : null);
+
+  function linkedTickets(equipmentId) {
+    const d = dash();
+    if (!d) return [];
+    return d.getRows().filter((r) => ((r.demo && r.demo.equipment_ids) || []).indexOf(equipmentId) !== -1);
+  }
+
+  // Earlier saved data (version 1) kept a copy of each ticket-linked repair as a history
+  // event. The ticket is the single source of truth now, so those copies are turned into
+  // ticket links and dropped, manual events are kept, and equipment added to the demo since
+  // is merged in.
+  async function migrateV1(saved) {
+    const d = dash();
+    const manual = [];
+    (saved.history || []).forEach((ev) => {
+      if (!ev.ticket_id) { manual.push(ev); return; }
+      const t = d ? d.getRow(ev.ticket_id) : null;
+      const ids = t && t.demo ? (t.demo.equipment_ids || []) : null;
+      if (t && ids.indexOf(ev.equipment_id) === -1) d.updateTicket(t.id, { demo: { equipment_ids: ids.concat(ev.equipment_id) } });
+    });
+    saved.history = manual;
+    try {
+      const seed = await fetchJson(FILES.equipment);
+      (seed.records || []).forEach((rec) => {
+        if (!saved.equipment.some((r) => r.id === rec.id)) saved.equipment.push(rec);
+      });
+    } catch (err) { console.warn("Could not merge new demo equipment:", err); }
+    saved.version = 2;
+    return saved;
+  }
+
   async function loadAll() {
     const props = await fetchJson("demo/properties.json");
     if (props.records && props.records[0]) propertyInfo = { id: props.records[0].id, name: props.records[0].name };
-
-    try {
-      if (window.Papa) {
-        const csv = await (await fetch("demo/tickets.csv")).text();
-        Papa.parse(csv, { header: true, skipEmptyLines: true }).data.forEach((r) => { tickets[r.id] = { status: r.status, issue: r.issue }; });
-      }
-    } catch (err) { console.warn("Could not read demo tickets for the history view:", err); }
+    if (dash()) await dash().ready; // the tickets must be loaded before saved data is migrated
 
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (err) { saved = null; }
-    if (saved && saved.version === 1 && Array.isArray(saved.equipment)) {
-      data = saved;
+    if (saved && Array.isArray(saved.equipment) && (saved.version === 1 || saved.version === 2)) {
+      data = saved.version === 1 ? await migrateV1(saved) : saved;
+      if (saved.version === 2 && data === saved && !Array.isArray(data.history)) data.history = [];
+      persist();
       return;
     }
     const [eq, hist, ut, sh] = await Promise.all([FILES.equipment, FILES.history, FILES.utilities, FILES.shutoffs].map(fetchJson));
-    data = { version: 1, equipment: eq.records || [], history: hist.records || [], utilities: ut.records || [], shutoffs: sh.records || [] };
+    data = { version: 2, equipment: eq.records || [], history: (hist.records || []).filter((h) => !h.ticket_id), utilities: ut.records || [], shutoffs: sh.records || [] };
   }
 
   function ensureLoaded() {
@@ -551,6 +580,8 @@
       edit.addEventListener("click", () => openEquipmentForm(rec.category, rec));
       actions.appendChild(edit);
       actions.appendChild(twoStepButton("del-" + rec.id, "Delete", "Click again to delete", "btn btn-ghost sys-btn-sm", () => {
+        // Tickets that pointed at this item lose the link; the tickets themselves are untouched.
+        linkedTickets(rec.id).forEach((t) => dash().updateTicket(t.id, { demo: { equipment_ids: (t.demo.equipment_ids || []).filter((i) => i !== rec.id) } }));
         data.equipment = data.equipment.filter((r) => r.id !== rec.id);
         data.history = data.history.filter((h) => h.equipment_id !== rec.id);
         persist();
@@ -613,13 +644,70 @@
 
   // ---- History -----------------------------------------------------------
 
+  // An equipment item's history is two kinds of entries:
+  //  - tickets linked to it (the ticket is the single source of truth, so the date, summary,
+  //    vendor, cost and status are read from the ticket and never copied), and
+  //  - manual events with no ticket (purchases, installations, inspections), stored here.
+  function historyEntries(rec) {
+    const entries = linkedTickets(rec.id).map((t) => ({ kind: "ticket", date: t.date_resolved || t.date_created, ticket: t }));
+    data.history.filter((h) => h.equipment_id === rec.id && !h.ticket_id).forEach((ev) => entries.push({ kind: "manual", date: ev.date, event: ev }));
+    return entries.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }
+
+  function ticketEntry(t) {
+    const manager = isManager();
+    const li = el("li", "sys-event");
+    const dateCol = el("span", "sys-event-date");
+    dateCol.appendChild(document.createTextNode(fmtDate(t.date_resolved || t.date_created)));
+    dateCol.appendChild(el("span", "sys-event-datelabel", t.date_resolved ? (t.status === "Closed" ? "Closed" : "Resolved") : "Reported"));
+    li.appendChild(dateCol);
+
+    // Managers can open the ticket; the ticket detail view is an internal screen, so the tenant preview shows plain text.
+    const body = manager ? el("button", "sys-event-btn") : el("div");
+    if (manager) {
+      body.type = "button";
+      body.setAttribute("aria-label", "Open ticket " + t.id + ": " + t.issue);
+      body.addEventListener("click", () => { if (dash()) dash().openTicket(t.id, body); });
+    }
+    body.appendChild(el("span", "sys-event-title", t.issue));
+    body.appendChild(el("span", "sys-event-summary" + (t.ai_summary ? "" : " sys-empty"), t.ai_summary || "No repair summary recorded."));
+    const meta = el("span", "sys-event-meta");
+    meta.appendChild(dash() ? dash().statusBadge(t.status) : badge(t.status, "muted"));
+    meta.appendChild(el("span", null, "Ticket " + t.id));
+    if (manager) {
+      meta.appendChild(el("span", t.assigned_to ? null : "sys-empty", t.assigned_to ? t.assigned_to : "No vendor recorded"));
+      meta.appendChild(el("span", typeof t.cost === "number" ? null : "sys-empty", typeof t.cost === "number" ? money(t.cost) : "Cost not recorded"));
+    }
+    body.appendChild(meta);
+    li.appendChild(body);
+    return li;
+  }
+
+  function manualEntry(e) {
+    const li = el("li", "sys-event");
+    li.appendChild(el("span", "sys-event-date", fmtDate(e.date)));
+    const body = el("div");
+    body.appendChild(el("div", "sys-event-summary", e.description || "No description recorded."));
+    const meta = el("div", "sys-event-meta");
+    meta.appendChild(badge(label(e.type) + " (no ticket)", "muted"));
+    if (isManager() && e.vendor) meta.appendChild(el("span", null, e.vendor));
+    if (isManager() && typeof e.cost === "number") meta.appendChild(el("span", null, money(e.cost)));
+    body.appendChild(meta);
+    li.appendChild(body);
+    return li;
+  }
+
   function historyBlock(rec) {
-    const events = data.history.filter((h) => h.equipment_id === rec.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const entries = historyEntries(rec);
     const key = "hist:" + rec.id;
     const open = expanded.has(key);
     const wrap = el("div", "sys-history");
-    const total = events.reduce((s, e) => s + (typeof e.cost === "number" ? e.cost : 0), 0);
-    const toggle = el("button", "sys-link-btn", (open ? "Hide" : "Show") + " history (" + events.length + ")" + (isManager() && total > 0 ? " · " + money(total) + " spent" : ""));
+    wrap.dataset.historyFor = rec.id;
+    const total = entries.reduce((s, e) => {
+      const c = e.kind === "ticket" ? e.ticket.cost : e.event.cost;
+      return s + (typeof c === "number" ? c : 0);
+    }, 0);
+    const toggle = el("button", "sys-link-btn", (open ? "Hide" : "Show") + " history (" + entries.length + ")" + (isManager() && total > 0 ? " · " + money(total) + " spent" : ""));
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", String(open));
     toggle.addEventListener("click", () => { if (open) expanded.delete(key); else expanded.add(key); render(); });
@@ -627,24 +715,8 @@
     if (!open) return wrap;
 
     const list = el("ul", "sys-history-list");
-    if (!events.length) list.appendChild(el("li", "sys-empty", "No history recorded yet."));
-    events.forEach((e) => {
-      const li = el("li", "sys-event");
-      li.appendChild(el("span", "sys-event-date", fmtDate(e.date)));
-      const body = el("div");
-      body.appendChild(el("div", null, e.description || ""));
-      const meta = el("div", "sys-event-meta");
-      meta.appendChild(badge(label(e.type), e.type === "warranty_claim" ? "ok" : "muted"));
-      if (e.ticket_id) {
-        const t = tickets[e.ticket_id];
-        meta.appendChild(el("span", null, "Ticket " + e.ticket_id + (t ? " (" + t.status + ")" : "")));
-      }
-      if (isManager() && e.vendor) meta.appendChild(el("span", null, e.vendor));
-      if (isManager() && typeof e.cost === "number") meta.appendChild(el("span", null, money(e.cost)));
-      body.appendChild(meta);
-      li.appendChild(body);
-      list.appendChild(li);
-    });
+    if (!entries.length) list.appendChild(el("li", "sys-empty", "No history yet. Link a ticket to this item, or add an event below."));
+    entries.forEach((e) => list.appendChild(e.kind === "ticket" ? ticketEntry(e.ticket) : manualEntry(e.event)));
     wrap.appendChild(list);
     if (isManager()) wrap.appendChild(historyForm(rec));
     return wrap;
@@ -660,7 +732,7 @@
     f.field(grid, "description", "What happened", "text", { wide: true });
     f.field(grid, "vendor", "Vendor (optional)", "text");
     f.field(grid, "cost", "Cost (optional)", "number");
-    f.field(grid, "ticket", "Linked ticket (optional)", "select", { options: Object.keys(tickets).map((id) => [id, id + " — " + tickets[id].issue]), wide: true });
+    box.appendChild(el("p", "sys-sub", "For events with no ticket, such as a purchase or an inspection. To record a repair, link its ticket to this item from the ticket instead."));
     box.appendChild(grid);
     const err = el("p", "form-error");
     err.hidden = true;
@@ -677,7 +749,7 @@
       const cost = f.get("cost");
       if (!date || !desc) { err.textContent = "Add a date and a short description."; err.hidden = false; return; }
       if (cost !== null && (isNaN(Number(cost)) || Number(cost) < 0)) { err.textContent = "Cost must be zero or more."; err.hidden = false; return; }
-      data.history.push({ id: uid("ev"), equipment_id: rec.id, date, type: f.get("type"), description: desc, ticket_id: f.get("ticket"), vendor: f.get("vendor"), cost: cost === null ? null : Number(cost) });
+      data.history.push({ id: uid("ev"), equipment_id: rec.id, date, type: f.get("type"), description: desc, vendor: f.get("vendor"), cost: cost === null ? null : Number(cost) });
       persist();
       render();
       setStatus("History event added to " + rec.type + ".", false);
@@ -1263,7 +1335,44 @@
     $("systems-dialog-close").addEventListener("click", closeDialog);
     $("systems-dialog-overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeDialog(); });
     $("systems-dialog-overlay").addEventListener("keydown", onDialogKeydown);
+
+    // Redraw when a ticket changes (status, cost or an equipment link), and load the
+    // equipment early so the ticket search can match equipment names.
+    if (dash()) {
+      dash().onChange(() => { if (active && data) render(); });
+      ensureLoaded().then(() => dash().refresh()).catch((err) => console.warn("Could not preload the demo equipment:", err));
+    }
   }
+
+  // ---- API for the ticket screens (tickets-demo.js, app.js) --------------
+
+  const equipmentName = (rec) => rec.type + (rec.location ? " (" + rec.location + ")" : "");
+
+  window.SystemsDemo = {
+    ensureLoaded,
+    getEquipment: () => (data ? data.equipment.map((r) => ({ id: r.id, type: r.type, category: r.category, location: r.location, presence: r.presence })) : []),
+    equipmentName: (id) => { const r = data && data.equipment.find((x) => x.id === id); return r ? equipmentName(r) : ""; },
+    equipmentLabels: (ids) => (data ? ids.map((id) => data.equipment.find((x) => x.id === id)).filter(Boolean).map((r) => [r.type, r.brand, r.model, r.location].filter(Boolean).join(" ")) : []),
+    attachmentNode,
+    // Jumps to an equipment item: opens the view, expands its category and history, and scrolls to it.
+    openEquipment: async (id) => {
+      await ensureLoaded();
+      const rec = data.equipment.find((r) => r.id === id);
+      if (!rec) return false;
+      viewAs = "manager";
+      if (!active) await enter();
+      expanded.add(rec.category);
+      expanded.add("hist:" + id);
+      render();
+      const card = document.querySelector('.sys-card[data-id="' + id + '"]');
+      if (card) {
+        card.tabIndex = -1;
+        card.scrollIntoView({ block: "start" });
+        card.focus({ preventScroll: true });
+      }
+      return true;
+    }
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 })();

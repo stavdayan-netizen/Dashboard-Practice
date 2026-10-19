@@ -1,49 +1,15 @@
 {
-  "schema": "equipment_history.v1",
+  "schema": "equipment_history.v2",
   "fictional": true,
   "property_id": "recBuim4HdvIeouCI",
-  "note": "Dated events per equipment record. ticket_id points at a row in demo/tickets.csv. Costs on repair events match the ticket cost.",
+  "note": "Manual history events that have no linked ticket (purchases, installations, inspections). Repairs and service visits that came from a ticket are NOT stored here: the ticket is the single source of truth, and an equipment item's history is built from the tickets whose equipment_ids include it (see demo/ticket_details.json). An event may carry date, type, description, vendor and cost because there is no ticket to read them from.",
   "records": [
-    { "id": "ev-001", "equipment_id": "eq-hv-fridge", "date": "2021-03-12", "type": "purchased", "description": "Refrigerator purchased.", "ticket_id": null, "vendor": "Harbor Appliance Outlet", "cost": null },
-    { "id": "ev-002", "equipment_id": "eq-hv-fridge", "date": "2021-03-20", "type": "installed", "description": "Refrigerator delivered and installed.", "ticket_id": null, "vendor": "Metro Appliance Repair", "cost": null },
-    { "id": "ev-003", "equipment_id": "eq-hv-fridge", "date": "2026-02-06", "type": "repair", "description": "Water inlet valve replaced to restore the ice maker.", "ticket_id": "HV-006", "vendor": "Metro Appliance Repair", "cost": 120 },
-    { "id": "ev-004", "equipment_id": "eq-hv-fridge", "date": "2026-07-03", "type": "warranty_claim", "description": "Freezer door gasket realigned under the extended warranty.", "ticket_id": "DEMO-12", "vendor": "Metro Appliance Repair", "cost": 0 },
-
-    { "id": "ev-005", "equipment_id": "eq-hv-range", "date": "2026-04-24", "type": "repair", "description": "Burner igniter replaced.", "ticket_id": "HV-007", "vendor": "Metro Appliance Repair", "cost": 95 },
-
-    { "id": "ev-006", "equipment_id": "eq-hv-dishwasher", "date": "2025-04-14", "type": "repair", "description": "Drain hose clog cleared.", "ticket_id": "HV-001", "vendor": "Metro Appliance Repair", "cost": 140 },
-    { "id": "ev-007", "equipment_id": "eq-hv-dishwasher", "date": "2026-09-27", "type": "ticket", "description": "Leak at the door seal reported; gasket on order.", "ticket_id": "HV-010", "vendor": "Metro Appliance Repair", "cost": null },
-
-    { "id": "ev-008", "equipment_id": "eq-hv-washer", "date": "2026-10-14", "type": "service", "description": "Machine leveled; tenant-owned, no repair cost.", "ticket_id": "HV-012", "vendor": "Cedar Maintenance Team", "cost": 0 },
-
-    { "id": "ev-009", "equipment_id": "eq-hv-dryer", "date": "2026-06-16", "type": "repair", "description": "Drive belt replaced.", "ticket_id": "DEMO-4", "vendor": "Metro Appliance Repair", "cost": 95 },
-
-    { "id": "ev-010", "equipment_id": "eq-hv-furnace", "date": "2017-11-02", "type": "installed", "description": "Furnace installed.", "ticket_id": null, "vendor": "Comfort Air Services", "cost": null },
-    { "id": "ev-011", "equipment_id": "eq-hv-furnace", "date": "2025-10-10", "type": "inspection", "description": "Annual furnace inspection.", "ticket_id": null, "vendor": "Comfort Air Services", "cost": 89 },
-    { "id": "ev-012", "equipment_id": "eq-hv-furnace", "date": "2025-11-05", "type": "repair", "description": "Igniter replaced; heat restored the same day.", "ticket_id": "HV-004", "vendor": "Comfort Air Services", "cost": 210 },
-
-    { "id": "ev-013", "equipment_id": "eq-hv-central-air", "date": "2017-11-02", "type": "installed", "description": "Central air installed with the furnace.", "ticket_id": null, "vendor": "Comfort Air Services", "cost": null },
-    { "id": "ev-014", "equipment_id": "eq-hv-central-air", "date": "2026-06-02", "type": "repair", "description": "Refrigerant topped up; leak check clear.", "ticket_id": "HV-008", "vendor": "Comfort Air Services", "cost": 175 },
-    { "id": "ev-015", "equipment_id": "eq-hv-central-air", "date": "2026-09-18", "type": "ticket", "description": "No airflow from the vents reported.", "ticket_id": "DEMO-8", "vendor": null, "cost": null },
-
-    { "id": "ev-016", "equipment_id": "eq-hv-thermostat", "date": "2026-08-25", "type": "ticket", "description": "Display blank; replacement scheduled.", "ticket_id": "DEMO-14", "vendor": "Comfort Air Services", "cost": null },
-
-    { "id": "ev-017", "equipment_id": "eq-hv-waterheater", "date": "2025-06-03", "type": "service", "description": "Sediment flushed from the tank.", "ticket_id": "HV-002", "vendor": "Sample Plumbing Co", "cost": 85 },
-    { "id": "ev-018", "equipment_id": "eq-hv-waterheater", "date": "2026-08-04", "type": "repair", "description": "Relief valve replaced; tank pressure checked.", "ticket_id": "HV-009", "vendor": "Sample Plumbing Co", "cost": 160 },
-
-    { "id": "ev-019", "equipment_id": "eq-hv-panel", "date": "2026-09-19", "type": "ticket", "description": "Loud buzzing from the breaker panel; electrician on site.", "ticket_id": "DEMO-11", "vendor": "Bright Spark Electric", "cost": null },
-
-    { "id": "ev-020", "equipment_id": "eq-hv-kitchen-drain", "date": "2026-09-05", "type": "ticket", "description": "Drain clogged; plumber scheduled.", "ticket_id": "DEMO-7", "vendor": "Sample Plumbing Co", "cost": null },
-    { "id": "ev-021", "equipment_id": "eq-hv-kitchen-faucet", "date": "2025-12-15", "type": "repair", "description": "Faucet cartridge replaced; drip stopped.", "ticket_id": "HV-005", "vendor": "Sample Plumbing Co", "cost": 55 },
-    { "id": "ev-022", "equipment_id": "eq-hv-toilet", "date": "2026-09-10", "type": "repair", "description": "Flapper valve replaced.", "ticket_id": "DEMO-13", "vendor": "Sample Plumbing Co", "cost": 60 },
-
-    { "id": "ev-023", "equipment_id": "eq-hv-balcony-door", "date": "2026-09-21", "type": "ticket", "description": "Door won't slide; track may be obstructed.", "ticket_id": "DEMO-15", "vendor": null, "cost": null },
-
-    { "id": "ev-024", "equipment_id": "eq-hv-front-door-lock", "date": "2023-05-10", "type": "installed", "description": "Deadbolt installed.", "ticket_id": null, "vendor": "Ace Locksmiths", "cost": null },
-    { "id": "ev-025", "equipment_id": "eq-hv-front-door-lock", "date": "2026-10-16", "type": "ticket", "description": "Lock sticking; awaiting assignment.", "ticket_id": "HV-013", "vendor": null, "cost": null },
-
-    { "id": "ev-026", "equipment_id": "eq-hv-smoke", "date": "2024-02-15", "type": "installed", "description": "Detectors installed in hallway and bedrooms.", "ticket_id": null, "vendor": "Cedar Maintenance Team", "cost": null },
-    { "id": "ev-027", "equipment_id": "eq-hv-smoke", "date": "2025-08-19", "type": "service", "description": "Hallway detector battery replaced.", "ticket_id": "HV-003", "vendor": "Cedar Maintenance Team", "cost": 0 },
-    { "id": "ev-028", "equipment_id": "eq-hv-smoke", "date": "2026-10-08", "type": "service", "description": "Batteries replaced in all detectors.", "ticket_id": "HV-011", "vendor": "Cedar Maintenance Team", "cost": 12 }
+    { "id": "ev-001", "equipment_id": "eq-hv-fridge", "date": "2021-03-12", "type": "purchased", "description": "Refrigerator purchased.", "vendor": "Harbor Appliance Outlet", "cost": null },
+    { "id": "ev-002", "equipment_id": "eq-hv-fridge", "date": "2021-03-20", "type": "installed", "description": "Refrigerator delivered and installed.", "vendor": "Metro Appliance Repair", "cost": null },
+    { "id": "ev-010", "equipment_id": "eq-hv-furnace", "date": "2017-11-02", "type": "installed", "description": "Furnace installed.", "vendor": "Comfort Air Services", "cost": null },
+    { "id": "ev-011", "equipment_id": "eq-hv-furnace", "date": "2025-10-10", "type": "inspection", "description": "Annual furnace inspection.", "vendor": "Comfort Air Services", "cost": 89 },
+    { "id": "ev-013", "equipment_id": "eq-hv-central-air", "date": "2017-11-02", "type": "installed", "description": "Central air installed with the furnace.", "vendor": "Comfort Air Services", "cost": null },
+    { "id": "ev-024", "equipment_id": "eq-hv-front-door-lock", "date": "2023-05-10", "type": "installed", "description": "Deadbolt installed.", "vendor": "Ace Locksmiths", "cost": null },
+    { "id": "ev-026", "equipment_id": "eq-hv-smoke", "date": "2024-02-15", "type": "installed", "description": "Detectors installed in hallway and bedrooms.", "vendor": "Cedar Maintenance Team", "cost": null }
   ]
 }

@@ -12,9 +12,10 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 | File | What it holds | Used by |
 | --- | --- | --- |
 | `properties.json` | The one property (copied from Airtable, read-only) | Dashboard demo mode (address for weather) |
-| `tickets.csv` | 25 tickets in the standard 13-column format (9 open, 16 resolved) | Dashboard demo mode, same validation as every other source |
-| `equipment.json` | 21 equipment records across the planned categories | Systems & Equipment view, agent |
-| `equipment_history.json` | 28 dated events per equipment record, linked to tickets | Equipment history, agent |
+| `tickets.csv` | 30 tickets in the standard 13-column format (13 open, 17 resolved or closed), using all seven demo statuses | Dashboard demo mode, same validation as every other source |
+| `ticket_details.json` | Extra fields per ticket: emergency flag, AI handling status, internal notes, vendor brief, **equipment links** and attachments | Ticket details, equipment history, agent |
+| `equipment.json` | 22 equipment records across the planned categories | Systems & Equipment view, agent |
+| `equipment_history.json` | 7 manual events that have **no ticket** (purchases, installations, inspections) | Equipment history |
 | `utilities.json` | Gas, Electric, Water, Sewer, Trash | Systems & Equipment, agent |
 | `shutoffs.json` | Water, gas, electrical and other shutoffs | Systems & Equipment, agent |
 | `files/*.svg` | Placeholder photos and documents | Attachment display |
@@ -22,7 +23,7 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 Every JSON file is `{ "schema": ..., "fictional": true, "records": [...] }`. `null` means unknown or not entered.
 
 ## Editing in demo mode
-The Systems & Equipment view (`systems.js`) reads these files once, then keeps all edits in the browser's localStorage under `dashboardPractice.demoSystems.v1`. The files in this folder are never modified. "Reset demo data" in the view clears that key and reloads the original files. Files added in the view are stored there as small data URLs (up to 300 KB each).
+The Systems & Equipment view (`systems.js`) reads these files once, then keeps all edits in the browser's localStorage under `dashboardPractice.demoSystems.v1`. Ticket edits (status, priority, emergency flag, AI handling status, notes, vendor brief, equipment links) are kept separately under `dashboardPractice.demoTickets.v1`; "Reset demo ticket edits" in the dashboard clears them. The files in this folder are never modified. "Reset demo data" in the view clears that key and reloads the original files. Files added in the view are stored there as small data URLs (up to 300 KB each).
 
 ## What the demo data deliberately contains
 - Complete, partial and empty equipment records. `Not Provided` (microwave, CO detector) means the information is unknown, not that the item is absent. `No` (garbage disposal, garage) means absent.
@@ -31,7 +32,8 @@ The Systems & Equipment view (`systems.js`) reads these files once, then keeps a
 - A mix of `Internal Only` and `Tenant Accessible` records, so the permission filtering can be tested.
 - The three utility special cases: water in the landlord's name but billed to the tenant, sewer included in water, trash included in property taxes.
 - A gas shutoff with **no known location** and electrical and other shutoffs **without tenant instructions**, so the agent can be tested on not inventing safety information.
-- Tickets that link to equipment through `equipment_history.json`. Four tickets (`DEMO-1`, `DEMO-9`, `DEMO-10`, `DEMO-16`) have no equipment, on purpose.
+- Tickets that link to equipment through `equipment_ids` in `ticket_details.json`. Five tickets (`DEMO-1`, `DEMO-9`, `DEMO-10`, `DEMO-16` and `HV-016`) have no equipment link, on purpose, so linking can be tried from the ticket. **The ticket is the single source of truth**: an item's repair history is built from the tickets that link to it (date, summary, vendor, cost, status all come from the ticket), so none of that is copied into `equipment_history.json`.
+- Tickets with the extra statuses (Awaiting Tenant, Scheduling Required, Closed), emergency flags, every AI handling status, a hand-written vendor brief (`HV-015`), notes, and placeholder photos (`HV-014`, `HV-015`). `HV-014` is a bathtub ticket for trying the search.
 
 ## Allowed values (match the planned Airtable single-select options)
 - `presence`: Yes, No, Not Provided
@@ -47,7 +49,8 @@ The Systems & Equipment view (`systems.js`) reads these files once, then keeps a
 The files mirror the planned tables, so moving to production means swapping the file reader for a backend call, not changing the shape:
 - `equipment.json` → an **Equipment** table (shared fields as columns, `details` as one JSON text field, four attachment fields: photos, receipts, manuals, warranty docs).
 - `utilities.json` → a **Utilities** table. `shutoffs.json` → a **Shutoffs** table.
-- `equipment_history.json` → an **Equipment events** table, or a linked-record field on tickets.
+- `ticket_details.json` → extra fields on the **Maintenance Tickets** table (emergency flag, AI handling status, notes, vendor brief, attachments) and a linked-record field from tickets to Equipment (`equipment_ids`).
+- `equipment_history.json` → an **Equipment events** table for events that have no ticket.
 - `property_id` is the Airtable Properties record ID, so the link survives renames.
 - Attachments: the demo stores a stable `id` plus a file `path`. In Airtable, store the attachment `id` (`att…`) with its record and field, never the temporary download URL, and ask for a fresh link when displaying.
 

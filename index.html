@@ -87,6 +87,23 @@
     <div class="tabs" role="tablist" aria-label="Request status">
       <button class="tab-btn is-active" id="tab-open" role="tab" aria-selected="true" aria-controls="requests-panel">Open Requests <span id="tab-open-count">(0)</span></button>
       <button class="tab-btn" id="tab-resolved" role="tab" aria-selected="false" aria-controls="requests-panel">Resolved <span id="tab-resolved-count">(0)</span></button>
+      <button class="tab-btn" id="tab-all" role="tab" aria-selected="false" aria-controls="requests-panel" hidden>All Tickets <span id="tab-all-count">(0)</span></button>
+    </div>
+
+    <div class="ticket-filters" id="ticket-filters" role="search" aria-label="Filter tickets" hidden>
+      <label class="form-field">
+        <span>Category</span>
+        <select id="filter-category"></select>
+      </label>
+      <label class="form-field ticket-filter-search">
+        <span>Search tickets</span>
+        <input type="search" id="filter-text" placeholder="Description, notes, vendor, equipment…" autocomplete="off">
+      </label>
+      <div class="ticket-filter-buttons">
+        <button type="button" class="btn btn-ghost" id="filter-reset">Reset filters</button>
+        <button type="button" class="btn btn-ghost" id="filter-reset-demo" title="Undo every ticket edit made in this demo">Reset demo ticket edits</button>
+      </div>
+      <p class="filter-summary" id="filter-summary" role="status" aria-live="polite"></p>
     </div>
 
     <div id="requests-panel" role="tabpanel">
@@ -229,5 +246,6 @@
 <script src="data.js"></script>
 <script src="app.js"></script>
 <script src="systems.js"></script>
+<script src="tickets-demo.js"></script>
 </body>
 </html>

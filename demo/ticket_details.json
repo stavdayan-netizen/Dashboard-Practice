@@ -1,0 +1,54 @@
+{
+  "schema": "ticket_details.v1",
+  "fictional": true,
+  "property_id": "recBuim4HdvIeouCI",
+  "note": "Extra fields for the tickets in demo/tickets.csv, keyed by ticket id. Defaults when a key is missing: emergency_flag false, ai_handling_status 'Not Started', vendor_brief '', notes '', equipment_ids [], attachments []. The ticket is the single source of truth for linked repairs: equipment_ids says which equipment a ticket is about, and equipment history is built from those tickets (vendor, cost, summary and status are never copied).",
+  "records": {
+    "DEMO-1": { "ai_handling_status": "Failed" },
+    "DEMO-4": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed" },
+    "DEMO-7": { "equipment_ids": ["eq-hv-kitchen-drain"] },
+    "DEMO-8": { "equipment_ids": ["eq-hv-central-air"], "ai_handling_status": "Analyzing" },
+    "DEMO-9": {},
+    "DEMO-10": {},
+    "DEMO-11": { "equipment_ids": ["eq-hv-panel"], "emergency_flag": true, "ai_handling_status": "Escalated", "notes": "Electrician on site; the panel was buzzing under load." },
+    "DEMO-12": { "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed", "notes": "Covered by the extended parts warranty." },
+    "DEMO-13": { "equipment_ids": ["eq-hv-toilet"], "ai_handling_status": "Completed" },
+    "DEMO-14": { "equipment_ids": ["eq-hv-thermostat"] },
+    "DEMO-15": { "equipment_ids": ["eq-hv-balcony-door"] },
+    "DEMO-16": {},
+    "HV-001": { "equipment_ids": ["eq-hv-dishwasher"], "ai_handling_status": "Completed" },
+    "HV-002": { "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed" },
+    "HV-003": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Completed" },
+    "HV-004": { "equipment_ids": ["eq-hv-furnace"], "emergency_flag": true, "ai_handling_status": "Completed", "notes": "No heat in November; same-day igniter replacement." },
+    "HV-005": { "equipment_ids": ["eq-hv-kitchen-faucet"], "ai_handling_status": "Completed" },
+    "HV-006": { "equipment_ids": ["eq-hv-fridge"], "ai_handling_status": "Completed" },
+    "HV-007": { "equipment_ids": ["eq-hv-range"], "ai_handling_status": "Completed" },
+    "HV-008": { "equipment_ids": ["eq-hv-central-air"], "ai_handling_status": "Completed" },
+    "HV-009": { "equipment_ids": ["eq-hv-waterheater"], "ai_handling_status": "Completed", "notes": "Relief valve replaced; discharge pipe checked and no further leaks found." },
+    "HV-010": { "equipment_ids": ["eq-hv-dishwasher"], "ai_handling_status": "Waiting for Tenant", "notes": "Gasket on order; tenant is not using the dishwasher until it is fixed." },
+    "HV-011": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Completed" },
+    "HV-012": { "equipment_ids": ["eq-hv-washer"], "ai_handling_status": "Completed" },
+    "HV-013": { "equipment_ids": ["eq-hv-front-door-lock"] },
+    "HV-014": {
+      "equipment_ids": ["eq-hv-bathtub"],
+      "ai_handling_status": "Waiting for Tenant",
+      "notes": "Tenant says the tub finish started bubbling after the water heater repair in August.",
+      "attachments": [
+        { "id": "demo-att-ticket-bathtub", "filename": "bathtub-photo.svg", "mime": "image/svg+xml", "path": "demo/files/ticket-bathtub.svg" }
+      ]
+    },
+    "HV-015": {
+      "equipment_ids": ["eq-hv-kitchen-drain", "eq-hv-kitchen-faucet"],
+      "emergency_flag": true,
+      "ai_handling_status": "Escalated",
+      "notes": "Leak is coming through the ceiling light fitting area; source not yet found.",
+      "vendor_brief": "Urgent plumbing visit needed at 10 Harbor View (fictional demo property).\nProblem: water dripping through the kitchen ceiling since 2026-10-18.\nPossible sources: kitchen sink drain or faucet supply lines, or the bathroom above.\nPlease confirm arrival time with the property manager before coming.",
+      "attachments": [
+        { "id": "demo-att-ticket-ceiling", "filename": "ceiling-leak-photo.svg", "mime": "image/svg+xml", "path": "demo/files/ticket-ceiling.svg" }
+      ]
+    },
+    "HV-016": {},
+    "HV-017": { "equipment_ids": ["eq-hv-dryer"], "ai_handling_status": "Completed", "notes": "Vent duct cleaned and lint trap deep-cleaned." },
+    "HV-018": { "equipment_ids": ["eq-hv-smoke"], "ai_handling_status": "Analyzing" }
+  }
+}

@@ -92,9 +92,17 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
   const CATEGORIES = ["Plumbing", "HVAC", "Electrical", "Appliance", "Doors & Locks", "General"];
   const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
-  const STATUSES = ["New", "Scheduled", "In Progress", "Resolved"];
-  const OPEN_STATUSES = ["New", "Scheduled", "In Progress"];
-  const VENDOR_RESEARCH_STATUSES = ["New", "In Progress"]; // open tickets that get a Vendor Research button
+  // The real dashboard keeps its four statuses. Demo mode adds three more
+  // (Awaiting Tenant, Scheduling Required, Closed); Closed counts as finished
+  // work, like Resolved, and needs a resolved date.
+  const STATUSES = DEMO_MODE
+    ? ["New", "Awaiting Tenant", "Scheduling Required", "Scheduled", "In Progress", "Resolved", "Closed"]
+    : ["New", "Scheduled", "In Progress", "Resolved"];
+  const CLOSED_STATUSES = DEMO_MODE ? ["Resolved", "Closed"] : ["Resolved"];
+  const OPEN_STATUSES = STATUSES.filter((s) => CLOSED_STATUSES.indexOf(s) === -1);
+  const isClosedStatus = (s) => CLOSED_STATUSES.indexOf(s) !== -1;
+  const VENDOR_RESEARCH_STATUSES = ["New", "Scheduling Required", "In Progress"]; // open tickets that get a Vendor Research button
+  const AI_HANDLING_STATUSES = ["Not Started", "Analyzing", "Waiting for Tenant", "Escalated", "Completed", "Failed"];
   const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
   // Soft, cohesive "candy pastel" palette for the category donut: bright,
@@ -123,23 +131,32 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   // charts don't repeat colors.
   const STATUS_COLORS = {
     "New": "#E1E4EA",
+    "Awaiting Tenant": "#FBF0B8",
+    "Scheduling Required": "#E4D9F7",
     "Scheduled": "#C7E4F7",
     "In Progress": "#FFC98F",
-    "Resolved": "#C0EDD4"
+    "Resolved": "#C0EDD4",
+    "Closed": "#CFD8E3"
   };
 
   const STATUS_BORDER_COLORS = {
     "New": "#AEB6C4",
+    "Awaiting Tenant": "#E3CC55",
+    "Scheduling Required": "#B9A5E2",
     "Scheduled": "#8EC2E8",
     "In Progress": "#F0A652",
-    "Resolved": "#8FCFA8"
+    "Resolved": "#8FCFA8",
+    "Closed": "#9FB0C4"
   };
 
   const STATUS_BADGE_CLASS = {
     "New": "badge-new",
+    "Awaiting Tenant": "badge-awaiting",
+    "Scheduling Required": "badge-schedreq",
     "Scheduled": "badge-scheduled",
     "In Progress": "badge-inprogress",
-    "Resolved": "badge-resolved"
+    "Resolved": "badge-resolved",
+    "Closed": "badge-closed"
   };
 
   const PRIORITY_BADGE_CLASS = {
@@ -321,12 +338,12 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       }
 
       const hasResolvedDate = !!row.date_resolved;
-      if (row.status === "Resolved") {
+      if (isClosedStatus(row.status)) {
         if (!isIsoDate(row.date_resolved) || row.date_resolved < row.date_created || row.date_resolved > AS_OF_DATE) {
-          errors.push(where + ": invalid date_resolved for a Resolved request"); return;
+          errors.push(where + ": invalid date_resolved for a " + row.status + " request"); return;
         }
       } else if (hasResolvedDate) {
-        errors.push(where + ": date_resolved set on a non-Resolved request"); return;
+        errors.push(where + (DEMO_MODE ? ": date_resolved set on a request that is not Resolved or Closed" : ": date_resolved set on a non-Resolved request")); return;
       }
 
       const hasCost = row.cost !== "" && row.cost !== undefined && row.cost !== null;
@@ -342,7 +359,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
         if (!isIsoDate(row.cost_date) || row.cost_date < row.date_created || row.cost_date > AS_OF_DATE) {
           errors.push(where + ": invalid cost_date"); return;
         }
-        if (row.status === "Resolved" && row.cost_date > row.date_resolved) {
+        if (isClosedStatus(row.status) && row.cost_date > row.date_resolved) {
           errors.push(where + ": cost_date is after date_resolved"); return;
         }
       }
@@ -413,7 +430,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   function computeKpis(rows) {
     const openRows = rows.filter((r) => OPEN_STATUSES.includes(r.status));
     const urgentOpen = openRows.filter((r) => r.priority === "Urgent");
-    const resolvedRows = rows.filter((r) => r.status === "Resolved");
+    const resolvedRows = rows.filter((r) => isClosedStatus(r.status));
     const resolvedThisMonth = resolvedRows.filter((r) => sameMonth(r.date_resolved, AS_OF_DATE));
 
     let avgResolutionText = "-";
@@ -614,22 +631,77 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     return state.property === ALL_PROPERTIES ? "any property" : state.property;
   }
 
+  // ---- Demo mode: ticket category filter and free-text search ------------
+  // Both filters work together, apply within the selected property, and cover open
+  // and closed tickets. The text search looks at the id, title, category, priority,
+  // status, vendor, summary, internal notes, vendor brief and linked equipment names.
+
+  const ticketFilters = { category: "", text: "" };
+
+  function ticketSearchText(row) {
+    const d = row.demo || {};
+    const equipment = window.SystemsDemo && window.SystemsDemo.equipmentLabels ? window.SystemsDemo.equipmentLabels(d.equipment_ids || []) : [];
+    return [row.id, row.issue, row.category, row.priority, row.status, row.assigned_to, row.ai_summary,
+      d.notes, d.vendor_brief, d.ai_handling_status, d.emergency_flag ? "emergency" : "", equipment.join(" ")]
+      .filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function applyTicketFilters(rows) {
+    if (!DEMO_MODE) return rows;
+    const tokens = ticketFilters.text.toLowerCase().split(/\s+/).filter(Boolean);
+    return rows.filter((r) => {
+      if (ticketFilters.category && r.category !== ticketFilters.category) return false;
+      if (!tokens.length) return true;
+      const hay = ticketSearchText(r);
+      return tokens.every((t) => hay.indexOf(t) !== -1);
+    });
+  }
+
+  const filtersActive = () => DEMO_MODE && (ticketFilters.category !== "" || ticketFilters.text.trim() !== "");
+
+  function sortAllRows(rows) {
+    return rows.slice().sort((a, b) => b.date_created.localeCompare(a.date_created) || a.id.localeCompare(b.id));
+  }
+
+  function emergencyBadge() {
+    const span = document.createElement("span");
+    span.className = "badge badge-emergency";
+    span.textContent = "Emergency";
+    return span;
+  }
+
+  function updateFilterSummary(total, matched, open, closed) {
+    const el = document.getElementById("filter-summary");
+    if (!el) return;
+    el.textContent = filtersActive()
+      ? matched + " of " + total + " tickets match (" + open + " open, " + closed + " resolved or closed)."
+      : "";
+  }
+
   function renderRequestsSection(rowsForProperty) {
-    const openRows = sortOpenRows(rowsForProperty.filter((r) => OPEN_STATUSES.includes(r.status)));
-    const resolvedRows = sortResolvedRows(rowsForProperty.filter((r) => r.status === "Resolved"));
+    const filteredRows = applyTicketFilters(rowsForProperty);
+    const openRows = sortOpenRows(filteredRows.filter((r) => OPEN_STATUSES.includes(r.status)));
+    const resolvedRows = sortResolvedRows(filteredRows.filter((r) => isClosedStatus(r.status)));
+    const allRows = DEMO_MODE ? sortAllRows(filteredRows) : [];
+    updateFilterSummary(rowsForProperty.length, filteredRows.length, openRows.length, resolvedRows.length);
 
     document.getElementById("tab-open-count").textContent = "(" + openRows.length + ")";
     document.getElementById("tab-resolved-count").textContent = "(" + resolvedRows.length + ")";
+    if (DEMO_MODE) document.getElementById("tab-all-count").textContent = "(" + allRows.length + ")";
 
     const openTab = document.getElementById("tab-open");
     const resolvedTab = document.getElementById("tab-resolved");
-    const isOpen = state.tab === "open";
+    const allTab = document.getElementById("tab-all");
+    const tabName = state.tab === "all" && DEMO_MODE ? "all" : (state.tab === "resolved" ? "resolved" : "open");
+    const isOpen = tabName === "open";
     openTab.classList.toggle("is-active", isOpen);
-    resolvedTab.classList.toggle("is-active", !isOpen);
+    resolvedTab.classList.toggle("is-active", tabName === "resolved");
+    allTab.classList.toggle("is-active", tabName === "all");
     openTab.setAttribute("aria-selected", String(isOpen));
-    resolvedTab.setAttribute("aria-selected", String(!isOpen));
+    resolvedTab.setAttribute("aria-selected", String(tabName === "resolved"));
+    allTab.setAttribute("aria-selected", String(tabName === "all"));
 
-    const activeRows = isOpen ? openRows : resolvedRows;
+    const activeRows = tabName === "open" ? openRows : (tabName === "resolved" ? resolvedRows : allRows);
     const showResolvedColumn = !isOpen;
 
     const head = document.getElementById("requests-table-head");
@@ -650,9 +722,15 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
     if (activeRows.length === 0) {
       emptyEl.hidden = false;
-      emptyEl.textContent = isOpen
-        ? "No open requests for " + propertyLabel() + "."
-        : "No resolved requests for " + propertyLabel() + ".";
+      if (filtersActive()) {
+        const elsewhere = tabName === "open" ? resolvedRows.length : (tabName === "resolved" ? openRows.length : 0);
+        emptyEl.textContent = "No " + (tabName === "open" ? "open " : tabName === "resolved" ? "resolved or closed " : "") + "tickets match these filters for " + propertyLabel() + "." +
+          (elsewhere > 0 ? " " + elsewhere + (elsewhere === 1 ? " ticket matches" : " tickets match") + " in the " + (tabName === "open" ? "Resolved / Closed" : "Open") + " tab (or see All Tickets)." : "");
+      } else {
+        emptyEl.textContent = tabName === "all"
+          ? "No requests for " + propertyLabel() + "."
+          : (isOpen ? "No open requests for " + propertyLabel() + "." : "No resolved requests for " + propertyLabel() + ".");
+      }
       return;
     }
     emptyEl.hidden = true;
@@ -678,6 +756,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
 
       const priorityTd = document.createElement("td");
       priorityTd.appendChild(badge(row.priority, PRIORITY_BADGE_CLASS));
+      if (row.demo && row.demo.emergency_flag) priorityTd.appendChild(emergencyBadge());
       tr.appendChild(priorityTd);
 
       const statusTd = document.createElement("td");
@@ -717,6 +796,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       issueSpan.textContent = row.issue;
       top.appendChild(issueSpan);
       top.appendChild(badge(row.priority, PRIORITY_BADGE_CLASS));
+      if (row.demo && row.demo.emergency_flag) top.appendChild(emergencyBadge());
       card.appendChild(top);
 
       const propertyDiv = document.createElement("div");
@@ -836,6 +916,9 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     addDialogField(body, "Actual Cost", row.cost === null ? "Not recorded" : formatCurrency(row.cost));
     addDialogField(body, "AI Summary (sample content, not a live AI result)", row.ai_summary || "-", "ai-summary");
     updateDialogVendorButton(row);
+    // Demo mode adds the emergency flag, AI handling status, notes, linked equipment,
+    // attachments, vendor brief and the edit form (see tickets-demo.js).
+    if (DEMO_MODE && window.TicketsDemo) window.TicketsDemo.decorate(row, body, titleEl);
 
     overlay.hidden = false;
     document.getElementById("dialog-close").focus();
@@ -901,7 +984,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     const status = document.getElementById("nr-status").value;
     const resolvedWrap = document.getElementById("nr-date-resolved-wrap");
     const resolvedInput = document.getElementById("nr-date-resolved");
-    const isResolved = status === "Resolved";
+    const isResolved = isClosedStatus(status);
     resolvedWrap.hidden = !isResolved;
     resolvedInput.required = isResolved;
     if (isResolved && !resolvedInput.value) resolvedInput.value = AS_OF_DATE;
@@ -992,7 +1075,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       priority: document.getElementById("nr-priority").value,
       status: status,
       assigned_to: document.getElementById("nr-assigned").value.trim(),
-      date_resolved: status === "Resolved" ? document.getElementById("nr-date-resolved").value : "",
+      date_resolved: isClosedStatus(status) ? document.getElementById("nr-date-resolved").value : "",
       cost: costValue !== "" ? costValue : "",
       cost_date: costValue !== "" ? document.getElementById("nr-cost-date").value : "",
       ai_summary: document.getElementById("nr-ai-summary").value.trim()
@@ -1053,6 +1136,10 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     });
     resolvedTab.addEventListener("click", () => {
       state.tab = "resolved";
+      renderRequestsSection(filterByProperty(state.rows, state.property));
+    });
+    document.getElementById("tab-all").addEventListener("click", () => {
+      state.tab = "all";
       renderRequestsSection(filterByProperty(state.rows, state.property));
     });
   }
@@ -2381,14 +2468,131 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   // Reads the fictional property and tickets from demo/ and attaches the
   // property's full address to every ticket (as the Airtable lookup does), so
   // the weather section works in demo mode too.
+  // Ticket edits made in demo mode are kept in this browser only (localStorage).
+  // Each entry holds the ticket's edited base fields and its extra demo details.
+  const DEMO_TICKET_STORE = "dashboardPractice.demoTickets.v1";
+  let demoDetails = {}; // ticket id -> extra fields from demo/ticket_details.json
+  let demoOverrides = { version: 1, tickets: {} };
+  const demoListeners = [];
+  const cloneJson = (o) => JSON.parse(JSON.stringify(o));
+
+  function readDemoOverrides() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DEMO_TICKET_STORE));
+      if (saved && saved.version === 1 && saved.tickets && typeof saved.tickets === "object") return saved;
+    } catch (err) { /* start fresh */ }
+    return { version: 1, tickets: {} };
+  }
+
+  function writeDemoOverrides() {
+    try { localStorage.setItem(DEMO_TICKET_STORE, JSON.stringify(demoOverrides)); return true; } catch (err) { return false; }
+  }
+
+  function demoExtrasFor(id) {
+    const defaults = { emergency_flag: false, ai_handling_status: "Not Started", vendor_brief: "", notes: "", equipment_ids: [], attachments: [] };
+    const saved = (demoOverrides.tickets[id] || {}).demo;
+    return Object.assign(defaults, cloneJson(demoDetails[id] || {}), saved ? cloneJson(saved) : {});
+  }
+
   async function loadDemoRows() {
-    const [propsRes, csvRes] = await Promise.all([fetch("demo/properties.json"), fetch("demo/tickets.csv")]);
+    const [propsRes, csvRes, detailsRes] = await Promise.all([fetch("demo/properties.json"), fetch("demo/tickets.csv"), fetch("demo/ticket_details.json")]);
     if (!propsRes.ok || !csvRes.ok) throw new Error("demo files not found (HTTP " + propsRes.status + " / " + csvRes.status + ")");
     const props = (await propsRes.json()).records || [];
+    demoDetails = detailsRes.ok ? ((await detailsRes.json()).records || {}) : {};
+    demoOverrides = readDemoOverrides();
     const addressByName = {};
     props.forEach((p) => { addressByName[p.name] = p.full_address || ""; });
     const parsed = Papa.parse(await csvRes.text(), { header: true, skipEmptyLines: true });
-    return parsed.data.map((row) => Object.assign({}, row, { full_address: addressByName[row.property] || "" }));
+    return parsed.data.map((row) => {
+      const edited = (demoOverrides.tickets[row.id] || {}).fields || {};
+      return Object.assign({}, row, edited, { full_address: addressByName[row.property] || "" });
+    });
+  }
+
+  // Applies an edit to one demo ticket. The base fields go through the same validation as
+  // every other source; the extra details (emergency flag, AI handling status, notes, vendor
+  // brief, equipment links) are stored with the ticket. Returns { ok, error?, saved? }.
+  function demoUpdateTicket(id, patch) {
+    const row = state.rows.find((r) => r.id === id);
+    if (!row) return { ok: false, error: "That ticket no longer exists." };
+    const merged = Object.assign({}, row, (patch && patch.fields) || {});
+    const raw = {
+      id: merged.id, date_created: merged.date_created, property: merged.property, tenant: merged.tenant, issue: merged.issue,
+      category: merged.category, priority: merged.priority, status: merged.status, assigned_to: merged.assigned_to || "",
+      date_resolved: merged.date_resolved || "",
+      cost: merged.cost === null || merged.cost === undefined || merged.cost === "" ? "" : String(merged.cost),
+      cost_date: merged.cost_date || "", ai_summary: merged.ai_summary || "", full_address: merged.full_address || ""
+    };
+    const result = validateRows([raw]);
+    if (result.errors.length) return { ok: false, error: result.errors[0].replace(/^row \d+ \([^)]*\): /, "") };
+    Object.assign(row, result.clean[0]);
+    if (patch && patch.demo) row.demo = Object.assign({}, row.demo || {}, cloneJson(patch.demo));
+    demoOverrides.tickets[id] = {
+      fields: {
+        status: row.status, priority: row.priority, category: row.category, assigned_to: row.assigned_to,
+        date_resolved: row.date_resolved, cost: row.cost === null ? "" : String(row.cost), cost_date: row.cost_date
+      },
+      demo: cloneJson(row.demo || {})
+    };
+    const saved = writeDemoOverrides();
+    renderAll();
+    demoListeners.forEach((cb) => { try { cb(id); } catch (err) { console.error(err); } });
+    return { ok: true, saved };
+  }
+
+  let demoReadyResolve = null;
+  if (DEMO_MODE) {
+    // Small API for the other demo files (systems.js, tickets-demo.js). It only exists in demo mode.
+    window.DashboardDemo = {
+      ready: new Promise((resolve) => { demoReadyResolve = resolve; }),
+      getRows: () => state.rows,
+      getRow: (id) => state.rows.find((r) => r.id === id) || null,
+      openTicket: (id, triggerEl) => {
+        const row = state.rows.find((r) => r.id === id);
+        if (row) openDialog(row, triggerEl || state.lastFocusedEl);
+        return !!row;
+      },
+      closeTicket: () => { document.getElementById("dialog-overlay").hidden = true; document.removeEventListener("keydown", onDialogKeydown, true); },
+      updateTicket: demoUpdateTicket,
+      refresh: () => { if (state.rows.length) renderAll(); },
+      resetTickets: () => { try { localStorage.removeItem(DEMO_TICKET_STORE); } catch (err) { /* ignore */ } location.reload(); },
+      onChange: (cb) => { demoListeners.push(cb); },
+      lists: { statuses: STATUSES.slice(), closedStatuses: CLOSED_STATUSES.slice(), priorities: PRIORITIES.slice(), categories: CATEGORIES.slice(), aiStatuses: AI_HANDLING_STATUSES.slice() },
+      asOfDate: () => AS_OF_DATE,
+      formatDate: (s) => formatDate(s),
+      formatCurrency: (n) => formatCurrency(n),
+      statusBadge: (s) => badge(s, STATUS_BADGE_CLASS)
+    };
+  }
+
+  function wireTicketFilters() {
+    const bar = document.getElementById("ticket-filters");
+    const category = document.getElementById("filter-category");
+    const text = document.getElementById("filter-text");
+    category.appendChild(new Option("All categories", ""));
+    CATEGORIES.forEach((c) => category.appendChild(new Option(c, c)));
+    bar.hidden = false;
+    document.getElementById("tab-all").hidden = false;
+    // With the extra Closed status this tab holds both Resolved and Closed tickets.
+    document.getElementById("tab-resolved").firstChild.textContent = "Resolved / Closed ";
+
+    const rerender = () => renderRequestsSection(filterByProperty(state.rows, state.property));
+    let timer = null;
+    text.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { ticketFilters.text = text.value; rerender(); }, 120);
+    });
+    category.addEventListener("change", () => { ticketFilters.category = category.value; rerender(); });
+    document.getElementById("filter-reset").addEventListener("click", () => {
+      clearTimeout(timer);
+      ticketFilters.category = "";
+      ticketFilters.text = "";
+      category.value = "";
+      text.value = "";
+      rerender();
+      text.focus();
+    });
+    document.getElementById("filter-reset-demo").addEventListener("click", () => window.DashboardDemo.resetTickets());
   }
 
   function showDemoNote() {
@@ -2422,7 +2626,9 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
         }
         clean = result.clean;
         errors = result.errors;
+        clean.forEach((r) => { r.demo = demoExtrasFor(r.id); });
         state.dataSource = "demo";
+        wireTicketFilters();
         if (errors.length > 0) showValidationBanner(errors, "demo/tickets.csv");
       } catch (err) {
         console.error("Could not load the demo data:", err);
@@ -2474,6 +2680,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     populatePropertySelect(clean);
     renderAll();
     startAutoRefresh();
+    if (demoReadyResolve) demoReadyResolve();
   }
 
   document.addEventListener("DOMContentLoaded", init);

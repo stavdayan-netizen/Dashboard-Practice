@@ -291,5 +291,18 @@
       "notes": "", "information_status": "Unknown", "visibility": "Internal Only",
       "details": { "detector_type": "CO", "last_replacement": null }
     }
+    ,{
+      "id": "eq-hv-bathtub", "category": "Plumbing & Drains", "type": "Hall bathroom bathtub", "is_custom_type": true,
+      "presence": "Yes", "ownership": "Landlord",
+      "brand": null, "model": null, "serial_number": null,
+      "manufacture_year": null, "manufacture_year_accuracy": "Unknown",
+      "purchase_date": null, "seller": null, "installation_date": null, "installation_company": null,
+      "installer_contact": { "name": null, "phone": null, "email": null, "website": null },
+      "product_warranty": { "description": null, "expires": null }, "workmanship_warranty": { "description": null, "expires": null },
+      "location": "Hall bathroom",
+      "attachments": { "photos": [], "receipts": [], "manuals": [], "warranty_docs": [] },
+      "notes": "Slow drain and peeling finish reported in October 2026.", "information_status": "Unknown", "visibility": "Tenant Accessible",
+      "details": { "pipe_material": null, "recurring_issues": null }
+    }
   ]
 }
