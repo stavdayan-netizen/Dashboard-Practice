@@ -15,7 +15,7 @@ Nothing here adds a cloud backend, a public AI chat, or a production integration
 | Make scenarios | Portal request to Airtable ticket; email on new ticket | Cloud (inactive) | Built (not touched by the agent) |
 | `serve.ps1` | Local PowerShell server: static files, Vendor Research API, **[planned]** agent API | The owner's machine, `localhost` only | Built; agent routes planned |
 | Demo data pack (`demo/`) | Tickets, ticket details, equipment, history, utilities, shutoffs, **[planned]** manuals registry | Static files | Built; manuals planned |
-| Agent store (`agent-data/`) | Conversations and proposals as JSON files | The owner's machine, Git-ignored | **[planned]** |
+| Agent store (`agent-data/`) | Conversations and proposals as JSON files | The owner's machine, Git-ignored | Built 2026-10-21 (`agent/agent-lib.ps1`), not yet reached by any route |
 | Anthropic Messages API | The model, with tool use | Anthropic cloud | **[planned]**, key stays on the server |
 | Demo tenant chat (inside `tenant.html?demo=1`) | The tenant's way to talk to the agent | Browser, local only | **[planned]** |
 | Manager conversation and approvals (ticket details in `?demo=1`) | The manager reads the full conversation and approves or rejects proposals | Browser, local only | **[planned]** |
@@ -181,17 +181,17 @@ flowchart TB
 - The existing Airtable read-only token pattern, the Make scenarios, the live tenant portal behavior and the real dashboard are not modified.
 - The tenant chat is added to `tenant.html` only behind `?demo=1` and a local-server check. Without `?demo=1` the page behaves exactly as today.
 
-## 7. Agent tools (executable, demo data)
+## 7. Agent tools (executable, demo data; built in Stage 4)
 
 | Tool | Reads | Audience filtering | Writes |
 | --- | --- | --- | --- |
 | `get_ticket_details` | Ticket and details | Tenant: no cost, vendor or Internal Only notes | Nothing |
 | `get_equipment_info` | Equipment record | Tenant: Tenant Accessible fields only | Nothing |
 | `get_maintenance_history` | History built from linked tickets | Tenant: tenant-safe summaries only | Nothing |
-| `get_equipment_manual_guidance` | `demo/manuals.json` for the matched equipment | Tenant-safe checks only to tenants; professional-only items stay out | Nothing |
+| `get_equipment_manual_guidance` | `demo/manuals.json` for the matched equipment | Tenant-safe checks, warnings and page references; restricted procedures come back only as short do-not-offer notes, never as steps. Every result says whether it is series or general guidance and that it is not exact-model guidance | Nothing |
 | `draft_ticket_update` | Nothing | n/a | A **pending proposal** in `agent-data/` |
 
-Input and output schemas are in `SPEC.MD`.
+Input schemas are in `SPEC.MD` and in `Get-AgentToolDefinitions` (`agent/agent-lib.ps1`). The audience is set by the caller and never by tool input; a tenant call must belong to a conversation that is bound to one ticket.
 
 ## 8. Model configuration [planned]
 
@@ -210,7 +210,7 @@ A cloud backend, deploying or enabling the AI chat on GitHub Pages, real authent
 1. Documentation: this file and `SPEC.MD` (behavior pending the Playground prompt).
 2. Replace the draft prompt with the tested Playground prompt; reconcile it with `agent/EMERGENCY_RULES.md`.
 3. Demo equipment refresh with real brands and exact models and the manuals registry, preserving equipment ids and relationships.
-4. Server tools, validation and the JSON store, tested without any API call.
+4. Server tools, validation and the JSON store, tested without any API call. **Done 2026-10-21** (`agent/agent-lib.ps1`, `agent/tests/Test-AgentTools.ps1`); the routes in section 3 and 4 are wired in Stage 5.
 5. API key configuration by the owner, then the agent loop with polling and cost limits.
 6. Tenant chat in `tenant.html?demo=1`; conversation, proposals and approvals in the ticket details.
 7. Scenario tests (12 emergency, 12 functional), recorded transcripts without secrets, final documentation.
