@@ -13,10 +13,10 @@ Nothing here adds a cloud backend, a public AI chat, or a production integration
 | Tenant portal (`tenant.html`, `tenant.js`) | Tenant request form; creates a ticket through Make | Browser | Built (live; unchanged) |
 | Airtable | Real ticket and property data, read with a public read-only token | Cloud | Built (not touched by the agent) |
 | Make scenarios | Portal request to Airtable ticket; email on new ticket | Cloud (inactive) | Built (not touched by the agent) |
-| `serve.ps1` | Local PowerShell server: static files, Vendor Research API, **[planned]** agent API | The owner's machine, `localhost` only | Built; agent routes planned |
+| `serve.ps1` | Local PowerShell server: static files, Vendor Research API, agent API (`/api/agent/*`, loaded from `agent/agent-api.ps1`) | The owner's machine, `localhost` only | Built (Stage 5, mock-tested) |
 | Demo data pack (`demo/`) | Tickets, ticket details, equipment, history, utilities, shutoffs, **[planned]** manuals registry | Static files | Built; manuals planned |
 | Agent store (`agent-data/`) | Conversations and proposals as JSON files | The owner's machine, Git-ignored | Built 2026-10-21 (`agent/agent-lib.ps1`), not yet reached by any route |
-| Anthropic Messages API | The model, with tool use | Anthropic cloud | **[planned]**, key stays on the server |
+| Anthropic Messages API | The model, with tool use | Anthropic cloud | Client built and mock-tested (Stage 5); **no live call made yet**; key stays on the server (`.env`) |
 | Demo tenant chat (inside `tenant.html?demo=1`) | The tenant's way to talk to the agent | Browser, local only | **[planned]** |
 | Manager conversation and approvals (ticket details in `?demo=1`) | The manager reads the full conversation and approves or rejects proposals | Browser, local only | **[planned]** |
 
@@ -103,6 +103,24 @@ Design notes:
 - **Audience comes from the route**, never from the request body. `/api/agent/tenant/*` always means tenant. Tools filter fields by that audience on the server (Internal Only data, costs, vendors and receipts are never returned to a tenant conversation).
 - Every run has hard limits: maximum tool rounds, maximum output tokens, maximum message length, and a per-conversation message cap, to bound cost.
 
+## 3a. Guards between the model and the tenant (Stage 5)
+
+```mermaid
+flowchart LR
+  M["Model reply"] --> C["Clean to plain text"]
+  C --> L{"Tool name, internal marker or credential?"}
+  L -- "yes" --> F["Fixed fail-safe message"]
+  L -- "no" --> E{"Clear gas, fire, CO or shock report without safety instructions?"}
+  E -- "yes" --> F
+  E -- "no" --> T["Tenant sees the reply"]
+  X["API error, limit hit, refusal, truncation, no key"] --> F
+  F --> T
+```
+
+- A run is bounded by tool rounds, output and input tokens, wall-clock time, per-call timeout, retries, and spend (per run, per day, in total; the worst case of a call must fit before it is sent).
+- Tool results, summaries, the trace, cost and credentials never leave the server; the tenant routes return only status and reply.
+- Older parts of a long conversation reach the model as a validated, model-written summary plus a server-built facts block (safety reports, refusals, earlier checks, introduction given). The full transcript is always kept.
+- Writes to conversations, the trace, proposals and the spend ledger run under a named mutex, so concurrent writers cannot lose updates.
 ## 4. Data flow: proposal, manager approval, ticket
 
 ```mermaid
@@ -193,9 +211,9 @@ flowchart TB
 
 Input schemas are in `SPEC.MD` and in `Get-AgentToolDefinitions` (`agent/agent-lib.ps1`). The audience is set by the caller and never by tool input; a tenant call must belong to a conversation that is bound to one ticket.
 
-## 8. Model configuration [planned]
+## 8. Model configuration (built in Stage 5, mock-tested)
 
-- API: Anthropic Messages API with tool use, called from `serve.ps1` with `Invoke-RestMethod`.
+- API: Anthropic Messages API with tool use, called with `Invoke-WebRequest` to the fixed address `https://api.anthropic.com/v1/messages` (PowerShell has no official SDK). The call runs in a background PowerShell process started by `serve.ps1` (`Start-Job`), never inside a web request, and the browser polls a run file.
 - Model: configurable in `.env`; the starting model is Claude Haiku 5.5 with switching to Claude Sonnet 5.5. The exact model identifiers and their availability on the account are to be confirmed against the API when the key is configured. No final production model is chosen.
 - The system prompt is the verbatim tested Playground prompt stored in the repo (`agent/system-prompt.draft.md`, no secrets in it), followed by the separate connected-mode addendum (`agent/system-prompt.connected-addendum.md`, draft awaiting the owner's approval) that defines tool access, visibility, conversation memory, manager approval and the ban on claiming unexecuted actions. The server joins the two files at run time and stores their hashes with each conversation. The addendum is tested before use (`agent/AGENT_SPEC.md` section 8).
 - **Conversation memory:** the API is stateless, so the server stores every message in full and automatically in `agent-data/`, and on each tenant message builds the model input from it: all messages for a short conversation, or the most relevant recent messages plus a stored, fixed-field summary of the older part for a long one (the full history is never replaced; the model is told not to assume omitted history; safety facts, refusals, checks tried and unresolved issues are always preserved). This keeps the one-time introduction, earlier refusals and unconfirmed resolution consistent.
@@ -211,6 +229,6 @@ A cloud backend, deploying or enabling the AI chat on GitHub Pages, real authent
 2. Replace the draft prompt with the tested Playground prompt; reconcile it with `agent/EMERGENCY_RULES.md`.
 3. Demo equipment refresh with real brands and exact models and the manuals registry, preserving equipment ids and relationships.
 4. Server tools, validation and the JSON store, tested without any API call. **Done 2026-10-21** (`agent/agent-lib.ps1`, `agent/tests/Test-AgentTools.ps1`); the routes in section 3 and 4 are wired in Stage 5.
-5. API key configuration by the owner, then the agent loop with polling and cost limits.
+5. API key configuration by the owner, then the agent loop with polling and cost limits. **Implemented and mock-tested 2026-10-21** (`agent/agent-config.ps1`, `agent-loop.ps1`, `agent-runs.ps1`, `agent-api.ps1`); the owner sets the key and runs the first controlled live test with `agent/Check-AgentSetup.ps1` and `agent/Run-LiveTest.ps1`.
 6. Tenant chat in `tenant.html?demo=1`; conversation, proposals and approvals in the ticket details.
 7. Scenario tests (12 emergency, 12 functional), recorded transcripts without secrets, final documentation.

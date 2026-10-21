@@ -337,8 +337,8 @@ Assert (@(Get-ChildItem -LiteralPath $store -Recurse -File -Filter '*.tmp').Coun
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert (-not (Test-Path (Join-Path $root 'agent-data\conversations\conv-*'))) 'the real agent-data/ received no test data'
-$gitChanged = & git -C $root status --porcelain -- demo serve.ps1 app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null
-Assert (-not $gitChanged) 'dashboard, tenant portal, server and demo files have no git changes'
+$gitChanged = & git -C $root status --porcelain -- app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null
+Assert (-not $gitChanged) 'dashboard and tenant portal files have no git changes (demo/ is covered by the byte-hash check)'
 
 if ([System.IO.Directory]::Exists($tmp)) { [System.IO.Directory]::Delete($tmp, $true) }
 Write-Host ''

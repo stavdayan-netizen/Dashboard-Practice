@@ -74,6 +74,20 @@ function Clean-Text([string]$value) {
     return (($value -replace '[\x00-\x1f]', ' ').Trim())
 }
 
+# AI Maintenance Agent API (demo only, this machine only). Everything lives in agent\ and is optional: if it cannot load,
+# the dashboard and Vendor Research work exactly as before.
+$script:AgentApiLoaded = $false
+$agentApi = Join-Path $root "agent\agent-api.ps1"
+if (Test-Path -LiteralPath $agentApi) {
+    try {
+        . $agentApi
+        Initialize-AgentLib -ProjectRoot $root -StoreDir $env:AGENT_STORE_DIR -EnvDir $env:AGENT_ENV_DIR
+        $script:AgentApiLoaded = $true
+    } catch {
+        Write-Host "AI agent API: disabled ($([string]$_.Exception.Message))"
+    }
+}
+
 function Handle-Api($context) {
     $request = $context.Request
     $response = $context.Response
@@ -89,6 +103,24 @@ function Handle-Api($context) {
         if (-not ($request.ContentType -like "application/json*")) {
             Write-Json $response 415 @{ error = "Expected application/json." }; return
         }
+    }
+
+    if ($path.StartsWith("/api/agent/")) {
+        if (-not $script:AgentApiLoaded) { Write-Json $response 503 @{ error = "The AI agent API is not available." }; return }
+        $agentBody = ""
+        if ($method -eq "POST") {
+            $agentReader = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
+            $agentBody = $agentReader.ReadToEnd()
+            if ($agentBody.Length -gt 8192) { Write-Json $response 413 @{ error = "Request too large." }; return }
+        }
+        $agentResult = Invoke-AgentApi -Method $method -Path $path -Query $request.QueryString -Headers $request.Headers -BodyText $agentBody -Port $Port -IsLocal $request.IsLocal
+        $agentBytes = [System.Text.Encoding]::UTF8.GetBytes([string]$agentResult.json)
+        $response.StatusCode = [int]$agentResult.status
+        $response.ContentType = "application/json; charset=utf-8"
+        $response.Headers.Add("Cache-Control", "no-store")
+        $response.ContentLength64 = $agentBytes.Length
+        $response.OutputStream.Write($agentBytes, 0, $agentBytes.Length)
+        return
     }
 
     if ($path -eq "/api/status" -and $method -eq "GET") {
@@ -175,7 +207,7 @@ function Send-StaticFile($context) {
     $filePath = [System.IO.Path]::GetFullPath((Join-Path $root $relative))
 
     # Never serve dotfiles (.env, .git, ...) or anything outside the project folder.
-    $hidden = @($relative -split '[\\/]' | Where-Object { $_.StartsWith(".") }).Count -gt 0
+    $hidden = @($relative -split '[\\/]' | Where-Object { $_.StartsWith(".") -or $_ -ieq "agent-data" }).Count -gt 0
     $inside = $filePath.StartsWith($rootFull + "\", [System.StringComparison]::OrdinalIgnoreCase)
 
     if ($inside -and -not $hidden -and (Test-Path $filePath -PathType Leaf)) {
@@ -201,6 +233,11 @@ if (Get-ApifyToken) {
     Write-Host "Vendor search: enabled (APIFY_TOKEN found in .env)"
 } else {
     Write-Host "Vendor search: disabled (set APIFY_TOKEN in .env)"
+}
+if ($script:AgentApiLoaded) {
+    $agentS = Get-AgentSettings
+    $agentLive = if ($agentS.ApiKey -and $agentS.LiveEnabled -and $agentS.ModelId) { "live calls ENABLED ($($agentS.ModelId))" } else { "live calls disabled" }
+    Write-Host "AI agent API: loaded (demo only, localhost only; $agentLive)"
 }
 
 while ($listener.IsListening) {

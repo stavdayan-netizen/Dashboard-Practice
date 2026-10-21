@@ -1,28 +1,33 @@
 # agent/ folder
 
-Documentation and, since Stage 4, the demo-only agent tools. Nothing here calls the Anthropic API or needs a key.
+Documentation and the demo-only AI agent (tools, local storage, Anthropic API client). Nothing here is deployed; it runs on this machine, in the `?demo=1` data, and live API calls are off until you turn them on in `.env`.
 
 | File | What it is |
 | --- | --- |
 | `system-prompt.draft.md` | The Playground-tested system prompt, verbatim between its markers (never edit the text). |
 | `system-prompt.connected-addendum.md` | The approved connected-mode addendum, added after the base prompt at run time. |
+| `prompt-hashes.json`, `Update-PromptHashes.ps1` | SHA-256 of both prompt texts. The agent refuses to start if a text differs; run the script with `-Confirm` only after you approve a change. |
 | `EMERGENCY_RULES.md`, `AGENT_SPEC.md` | Safety floor, conversation paths, tools, test scenarios, decisions. |
-| `agent-lib.ps1` | The five tools (`get_ticket_details`, `get_equipment_info`, `get_maintenance_history`, `get_equipment_manual_guidance`, `draft_ticket_update`), the local conversation and proposal store, the manager decision functions, and the tool definitions for the later API stage. Windows PowerShell 5.1. |
-| `tests/Test-AgentTools.ps1` | Direct tests of the library. |
+| `agent-lib.ps1` | The five tools, the local conversation and proposal store (with a store lock), the manager decision functions, the tool definitions. |
+| `agent-config.ps1` | Settings from `.env`, prompt loading, spend ledger, the Anthropic API transport. |
+| `agent-loop.ps1` | Memory (facts ledger, validated summaries), the tool-use loop, limits, fail-safe replies, output guards. |
+| `agent-runs.ps1`, `agent-api.ps1` | Background runs and the local `/api/agent/*` routes (loaded by `serve.ps1`). |
+| `Check-AgentSetup.ps1` | Shows what is set up (never prints the key); `-VerifyModels` asks the API, free of charge, whether the model ids exist for your account. |
+| `Run-LiveTest.ps1` | The first controlled live test. Paid. Sends nothing without `-Confirm`. |
+| `tests/` | `Test-AgentTools.ps1` (tools, 185 checks), `Test-AgentLoop.ps1` (loop, mocked, 175), `Test-AgentRoutes.ps1` (runs, routes, HTTP, mocked, 67). |
 
-Run the tests (about a minute; uses a temporary store and leaves `demo/` and `agent-data/` untouched):
+Run all the tests (no key and no API call needed; about a minute):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentTools.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentLoop.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentRoutes.ps1
 ```
 
-Use the library:
+Turn on live calls (your own machine, your own key):
 
-```powershell
-. .\agent\agent-lib.ps1
-Initialize-AgentLib -ProjectRoot $PWD.Path        # store defaults to agent-data\ (ignored by git)
-$c = (New-Conversation -TicketId 'HV-010').data.conversation_id
-Invoke-AgentTool -Name 'get_ticket_details' -ToolInput @{} -Audience 'tenant' -ConversationId $c
-```
+1. Open `.env` in the project folder in a text editor and add `ANTHROPIC_API_KEY=` followed by your key, `AGENT_LIVE_ENABLED=1` and `AGENT_MODEL=haiku`. Do not paste the key anywhere else.
+2. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Check-AgentSetup.ps1 -VerifyModels`
+3. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Run-LiveTest.ps1 -Scenario dishwasher` (shows the plan), then add `-Confirm` to run it.
 
-Conversations and proposals are stored as JSON files under `agent-data/` (outside git). The full rules are in `SPEC.MD` ("Stage 4 implementation") and `Architecture.md`.
+Conversations, proposals, run files and the spend ledger are written under `agent-data/` (ignored by git). The full rules are in `SPEC.MD` ("Stage 4 implementation", "Stage 5 implementation") and `Architecture.md`.

@@ -89,12 +89,13 @@ function New-RandomId([string]$Prefix) {
 # ---------------------------------------------------------------- setup and demo data
 
 function Initialize-AgentLib {
-    param([Parameter(Mandatory = $true)][string]$ProjectRoot, [string]$DemoDir, [string]$StoreDir)
+    param([Parameter(Mandatory = $true)][string]$ProjectRoot, [string]$DemoDir, [string]$StoreDir, [string]$EnvDir)
     $root = [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\')
     if (-not $DemoDir) { $DemoDir = Join-Path $root 'demo' }
     if (-not $StoreDir) { $StoreDir = Join-Path $root 'agent-data' }
     $script:Cfg = @{
         Root = $root
+        EnvDir = $(if ($EnvDir) { [System.IO.Path]::GetFullPath($EnvDir).TrimEnd([char]92) } else { $root })
         DemoDir = [System.IO.Path]::GetFullPath($DemoDir).TrimEnd('\')
         StoreDir = [System.IO.Path]::GetFullPath($StoreDir).TrimEnd('\')
     }
@@ -172,6 +173,54 @@ function Get-AllowedEquipmentIds($Conv) {
     return @($ids | Where-Object { $_ } | Select-Object -Unique)
 }
 
+function Get-StoreMutex {
+    $key = $script:Cfg.StoreDir.ToLowerInvariant()
+    if ($script:MutexKey -ceq $key -and $null -ne $script:StoreMutex) { return $script:StoreMutex }
+    $sha = [System.Security.Cryptography.SHA1]::Create()
+    $h = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($key)) | ForEach-Object { $_.ToString('x2') })
+    $sha.Dispose()
+    $script:StoreMutex = New-Object System.Threading.Mutex($false, ('Local\DashboardPracticeAgent-' + $h))
+    $script:MutexKey = $key
+    return $script:StoreMutex
+}
+
+function Invoke-StoreLock([scriptblock]$Block) {
+    # One writer at a time across threads and processes of this login session (read-modify-write safety).
+    $m = Get-StoreMutex
+    $got = $false
+    try {
+        try { $got = $m.WaitOne(20000) } catch [System.Threading.AbandonedMutexException] { $got = $true }
+        if (-not $got) { throw 'The agent store is busy.' }
+        return (& $Block)
+    }
+    finally { if ($got) { $m.ReleaseMutex() } }
+}
+
+function New-TenantToken {
+    $bytes = New-Object byte[] 24
+    $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
+    return ([Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_').TrimEnd('='))
+}
+
+function Get-TokenHash([string]$Token) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $h = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Token)) | ForEach-Object { $_.ToString('x2') })
+    $sha.Dispose()
+    return $h
+}
+
+function Test-ConversationToken([string]$ConversationId, [string]$Token) {
+    # A tenant must present the secret returned when the conversation was opened.
+    if ($Token -notmatch '^[A-Za-z0-9_-]{32}$') { return $false }
+    $conv = Read-Conversation $ConversationId
+    if ($null -eq $conv) { return $false }
+    $stored = Get-Prop $conv 'tenant_token_sha256' $null
+    if (-not $stored) { return $false }
+    return ((Get-TokenHash $Token) -ceq $stored)
+}
+
 function New-Conversation {
     param([string]$TicketId, [string]$EquipmentId)
     if (-not (Test-Initialized)) { throw 'Library not initialized.' }
@@ -186,6 +235,7 @@ function New-Conversation {
         if (-not $ok) { return (New-Result $false 'new_conversation' 'server' $null 'not_available' 'That equipment is not available.') }
     }
     $id = New-RandomId 'conv'
+    $token = New-TenantToken
     $now = Get-Stamp
     $conv = [ordered]@{
         schema = 'conversation.v1'
@@ -197,46 +247,76 @@ function New-Conversation {
         status = 'open'
         model = $null
         prompt_hashes = [ordered]@{ base = $null; addendum = $null }
+        tenant_token_sha256 = (Get-TokenHash $token)
+        facts = $null
         summary = $null
         messages = @()
         trace = @()
     }
     Write-JsonFile (Get-ConversationPath $id) $conv
-    return (New-Result $true 'new_conversation' 'server' ([ordered]@{ conversation_id = $id; ticket_id = $TicketId; created_at = $now }))
+    return (New-Result $true 'new_conversation' 'server' ([ordered]@{ conversation_id = $id; ticket_id = $TicketId; created_at = $now; tenant_token = $token }))
 }
 
 function Add-ConversationMessage {
-    param([string]$ConversationId, [string]$Role, [string]$Text)
-    $conv = Read-Conversation $ConversationId
-    if ($null -eq $conv) { return (New-Result $false 'add_message' 'server' $null 'not_available' 'Conversation not available.') }
+    param([string]$ConversationId, [string]$Role, [string]$Text, [string]$Source)
     if ($Role -cne 'tenant' -and $Role -cne 'assistant') { return (New-Result $false 'add_message' 'server' $null 'invalid_input' 'Role must be tenant or assistant.') }
+    if (-not $Source) { $Source = $(if ($Role -ceq 'tenant') { 'tenant' } else { 'model' }) }
+    if ($Source -cne 'tenant' -and $Source -cne 'model' -and $Source -cne 'failsafe') { return (New-Result $false 'add_message' 'server' $null 'invalid_input' 'Unknown message source.') }
     $max = $(if ($Role -ceq 'tenant') { $script:MaxTenantText } else { $script:MaxAssistantText })
     if (-not (Test-CleanText $Text $max)) { return (New-Result $false 'add_message' 'server' $null 'invalid_input' "Text must be 1 to $max characters without control characters.") }
-    if (@($conv.messages).Count -ge $script:MaxMessages) { return (New-Result $false 'add_message' 'server' $null 'limit_exceeded' 'Conversation message limit reached.') }
-    $seq = @($conv.messages).Count + 1
-    $ts = Get-Stamp
-    $msg = [ordered]@{ seq = $seq; ts = $ts; role = $Role; text = $Text; attachments = @() }
-    $conv.messages = @($conv.messages) + @($msg)
-    $conv.updated_at = $ts
-    Write-JsonFile (Get-ConversationPath $ConversationId) $conv
-    return (New-Result $true 'add_message' 'server' ([ordered]@{ seq = $seq; ts = $ts }))
+    return (Invoke-StoreLock {
+            $conv = Read-Conversation $ConversationId
+            if ($null -eq $conv) { return (New-Result $false 'add_message' 'server' $null 'not_available' 'Conversation not available.') }
+            if (@($conv.messages).Count -ge $script:MaxMessages) { return (New-Result $false 'add_message' 'server' $null 'limit_exceeded' 'Conversation message limit reached.') }
+            $seq = @($conv.messages).Count + 1
+            $ts = Get-Stamp
+            $msg = [ordered]@{ seq = $seq; ts = $ts; role = $Role; source = $Source; text = $Text; attachments = @() }
+            $conv.messages = @($conv.messages) + @($msg)
+            $conv.updated_at = $ts
+            Write-JsonFile (Get-ConversationPath $ConversationId) $conv
+            return (New-Result $true 'add_message' 'server' ([ordered]@{ seq = $seq; ts = $ts }))
+        })
+}
+
+function Add-TraceEvent($ConversationId, $Entry) {
+    # Manager-only trace entry (tool call, model call, guard event). Never carries tool result data.
+    if (-not (Test-IdFormat $ConversationId $script:RxConv)) { return }
+    [void](Invoke-StoreLock {
+            $conv = Read-Conversation $ConversationId
+            if ($null -eq $conv) { return }
+            $e = [ordered]@{ seq = @($conv.trace).Count + 1; ts = Get-Stamp }
+            foreach ($k in $Entry.Keys) { $e[$k] = $Entry[$k] }
+            $conv.trace = @($conv.trace) + @($e)
+            Write-JsonFile (Get-ConversationPath $ConversationId) $conv
+        })
 }
 
 function Add-ToolTrace($ConversationId, [string]$Tool, [string]$Audience, $ToolInput, $Result) {
-    $conv = Read-Conversation $ConversationId
-    if ($null -eq $conv) { return }
     $err = Get-Prop $Result 'error' $null
-    $entry = [ordered]@{
-        seq = @($conv.trace).Count + 1
-        ts = Get-Stamp
-        tool = $Tool
-        audience = $Audience
-        input = $ToolInput
-        ok = [bool]$Result['ok']
-        error_code = $(if ($err) { $err['code'] } else { $null })
-    }
-    $conv.trace = @($conv.trace) + @($entry)
-    Write-JsonFile (Get-ConversationPath $ConversationId) $conv
+    Add-TraceEvent $ConversationId ([ordered]@{
+            tool = $Tool
+            audience = $Audience
+            input = $ToolInput
+            ok = [bool]$Result['ok']
+            error_code = $(if ($err) { $err['code'] } else { $null })
+        })
+}
+
+function Set-ConversationFields {
+    # Server-side updates to a few conversation fields (never messages, never the token).
+    param([string]$ConversationId, [hashtable]$Fields)
+    $allowed = @('model', 'prompt_hashes', 'summary', 'facts', 'status')
+    foreach ($k in $Fields.Keys) { if ($allowed -cnotcontains $k) { throw "Field '$k' cannot be set." } }
+    [void](Invoke-StoreLock {
+            $conv = Read-Conversation $ConversationId
+            if ($null -eq $conv) { throw 'Conversation not available.' }
+            foreach ($k in $Fields.Keys) {
+                if ($null -ne $conv.PSObject.Properties[$k]) { $conv.$k = $Fields[$k] }
+                else { Add-Member -InputObject $conv -NotePropertyName $k -NotePropertyValue $Fields[$k] }
+            }
+            $conv.updated_at = Get-Stamp
+            Write-JsonFile (Get-ConversationPath $ConversationId) $conv
+        })
 }
 
 function Get-ConversationView {
@@ -250,7 +330,7 @@ function Get-ConversationView {
     if ($Audience -cne 'manager') { return (New-Result $false 'get_conversation' $Audience $null 'forbidden' 'Unknown audience.') }
     $props = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $conv.id })
     $full = [ordered]@{}
-    foreach ($p in $conv.PSObject.Properties) { $full[$p.Name] = $p.Value }
+    foreach ($p in $conv.PSObject.Properties) { if ($p.Name -cne 'tenant_token_sha256') { $full[$p.Name] = $p.Value } }
     $full['proposals'] = $props
     return (New-Result $true 'get_conversation' 'manager' $full)
 }
@@ -563,21 +643,23 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     $hash = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($canon)) | ForEach-Object { $_.ToString('x2') })
     $sha.Dispose()
-    $pending = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $Conv.id -and $_.status -ceq 'pending' })
-    $dup = $pending | Where-Object { $_.fields_hash -ceq $hash } | Select-Object -First 1
-    if ($dup) { return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $dup.id; status = 'pending'; duplicate = $true })) }
-    if ($pending.Count -ge $script:MaxPendingPerConversation) { return (New-Result $false $tool $Audience $null 'limit_exceeded' 'Too many pending proposals for this conversation.') }
-    $pid2 = New-RandomId 'prop'
-    $now = Get-Stamp
-    $prop = [ordered]@{
-        schema = 'proposal.v1'; id = $pid2; conversation_id = $Conv.id; ticket_id = $tid
-        proposed_fields = $clean; auto_added_fields = @($autoAdded); reason = $reason
-        tenant_confirmed_resolution = $confirmed; fields_hash = $hash
-        status = 'pending'; created_at = $now; decided_at = $null; applied_at = $null; decision_note = $null
-        history = @([ordered]@{ ts = $now; event = 'created'; by = 'agent' })
-    }
-    Write-JsonFile (Get-ProposalPath $pid2) $prop
-    return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $pid2; status = 'pending'; duplicate = $false }))
+    return (Invoke-StoreLock {
+            $pending = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $Conv.id -and $_.status -ceq 'pending' })
+            $dup = $pending | Where-Object { $_.fields_hash -ceq $hash } | Select-Object -First 1
+            if ($dup) { return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $dup.id; status = 'pending'; duplicate = $true })) }
+            if ($pending.Count -ge $script:MaxPendingPerConversation) { return (New-Result $false $tool $Audience $null 'limit_exceeded' 'Too many pending proposals for this conversation.') }
+            $pid2 = New-RandomId 'prop'
+            $now = Get-Stamp
+            $prop = [ordered]@{
+                schema = 'proposal.v1'; id = $pid2; conversation_id = $Conv.id; ticket_id = $tid
+                proposed_fields = $clean; auto_added_fields = @($autoAdded); reason = $reason
+                tenant_confirmed_resolution = $confirmed; fields_hash = $hash
+                status = 'pending'; created_at = $now; decided_at = $null; applied_at = $null; decision_note = $null
+                history = @([ordered]@{ ts = $now; event = 'created'; by = 'agent' })
+            }
+            Write-JsonFile (Get-ProposalPath $pid2) $prop
+            return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $pid2; status = 'pending'; duplicate = $false }))
+        })
 }
 
 # ---------------------------------------------------------------- tool dispatcher and definitions
@@ -677,19 +759,21 @@ function Set-ProposalState {
     $path = Get-ProposalPath $ProposalId
     if ($null -eq $path -or -not (Test-Path -LiteralPath $path)) { return (New-Result $false $tool 'manager' $null 'not_found' 'Proposal not found.') }
     if ($Note -and -not (Test-CleanText $Note 500)) { return (New-Result $false $tool 'manager' $null 'invalid_input' 'Note must be 1 to 500 characters.') }
-    $p = Read-JsonFile $path
-    $now = Get-Stamp
-    if ($Action -ceq 'applied') {
-        if ($p.status -cne 'approved') { return (New-Result $false $tool 'manager' $null 'invalid_state' 'Only an approved proposal can be marked applied.') }
-        $p.status = 'applied'; $p.applied_at = $now
-    }
-    else {
-        if ($p.status -cne 'pending') { return (New-Result $false $tool 'manager' $null 'invalid_state' 'Only a pending proposal can be decided.') }
-        $p.status = $(if ($Action -ceq 'approve') { 'approved' } else { 'rejected' })
-        $p.decided_at = $now
-        if ($Note) { $p.decision_note = $Note }
-    }
-    $p.history = @($p.history) + @([ordered]@{ ts = $now; event = $p.status; by = 'manager' })
-    Write-JsonFile $path $p
-    return (New-Result $true $tool 'manager' ([ordered]@{ proposal_id = $p.id; status = $p.status; decided_at = $p.decided_at; applied_at = $p.applied_at }))
+    return (Invoke-StoreLock {
+            $p = Read-JsonFile $path
+            $now = Get-Stamp
+            if ($Action -ceq 'applied') {
+                if ($p.status -cne 'approved') { return (New-Result $false $tool 'manager' $null 'invalid_state' 'Only an approved proposal can be marked applied.') }
+                $p.status = 'applied'; $p.applied_at = $now
+            }
+            else {
+                if ($p.status -cne 'pending') { return (New-Result $false $tool 'manager' $null 'invalid_state' 'Only a pending proposal can be decided.') }
+                $p.status = $(if ($Action -ceq 'approve') { 'approved' } else { 'rejected' })
+                $p.decided_at = $now
+                if ($Note) { $p.decision_note = $Note }
+            }
+            $p.history = @($p.history) + @([ordered]@{ ts = $now; event = $p.status; by = 'manager' })
+            Write-JsonFile $path $p
+            return (New-Result $true $tool 'manager' ([ordered]@{ proposal_id = $p.id; status = $p.status; decided_at = $p.decided_at; applied_at = $p.applied_at }))
+        })
 }

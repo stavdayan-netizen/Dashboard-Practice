@@ -191,3 +191,25 @@ These were set by the owner when Stage 3 was approved. They are test and design 
 1. **Conversation summaries must be tested for fidelity.** Before summaries are used, a test must build long conversations with known facts and check that the stored summary preserves every safety-critical fact (for example a gas smell reported earlier, a hazard that was ruled out or confirmed), every refusal by the tenant, every check already attempted with its result, whether the introduction was given, the classification so far, and every unresolved issue. The test compares the summary's fixed fields with the facts that were planted, and then asks the agent follow-up questions that depend on those facts (for example whether it repeats a refused check or re-introduces itself) with only the summary and the recent messages in context. A summary that drops or distorts any fact fails, and the conversation then keeps full history instead of a summary.
 2. **Immediate electrical danger gets safety-first guidance and appropriate emergency assistance, not only a request to contact the manager.** For a confirmed or credibly suspected electrical hazard (addendum section F, situation 1) the reply must lead with the safety instructions, direct the tenant to emergency services when the danger warrants it, name a verified utility emergency number only when the provider is confirmed, and add the property manager as a further step. A reply that only says to contact the manager fails. Emergency scenarios 1, 3, 4 and 10 are checked against this.
 3. **Open question for the Playground test of the addendum:** section F lists the indicators that call for 911 (sparks, smoke, a burning smell, a shock, injury). Decide whether water actively coming out of, or contacting, a live fixture should call for emergency services by itself even without those indicators. The approved addendum text is not changed until that is tested and decided.
+
+## 10. Stage 5 notes: decisions made and what is still open (2026-10-21)
+
+**Decisions the owner made when approving Stage 4 and Stage 5**
+
+- **Equipment scope:** tenant scoping stays strict (Tenant Accessible equipment linked to the ticket or chosen when the conversation is opened). The portal may let the tenant explicitly choose among authorized equipment when opening a conversation.
+- **Background execution and locking:** replies are prepared in a background process, one run per conversation, and all concurrent writes go through a mutex.
+- **Tool results and professional-only items:** tool results may carry short professional-only warnings, never actionable restricted procedures. The registry texts for restricted items name the kind of work (for example "the gas valve, the front panel and start-up procedures are service-level work"), not steps.
+- **Long conversations:** model-written structured summaries, together with a deterministic facts ledger kept independently of the model (safety reports, refusals, attempted checks and answers, unresolved items), the complete original transcript, validation of every summary against the source, and tests for omissions. Implemented in `agent/agent-loop.ps1`; tested in `agent/tests/Test-AgentLoop.ps1`, which covers a gas smell that a summary leaves out, a refusal that it leaves out, a missing or invalid field, injected instructions, a wrong introduction flag, invalid JSON, regeneration with feedback, reuse, fallback to full history, and a trimmed window.
+
+**Requirements from section 9, status**
+
+1. Summary fidelity: implemented and tested as described above.
+2. Immediate electrical danger gets safety guidance and emergency assistance, not only manager contact: the fail-safe and the reply guard give leave or stay-away instructions and 911 where it fits; the model's own handling is checked in the Playground test of the addendum and the live test.
+3. Whether water actively coming from a live fixture should call for 911 even without sparks, smoke, a burning smell, a shock or injury is still open (addendum section F).
+
+**Open for the owner**
+
+- Confirm the two deterministic safety nets (fixed fail-safe message when the model path fails; replacement of a reply to a clear gas, fire, CO or shock report that lacks basic safety instructions). They are not part of the Playground-tested prompt.
+- Choose the starting model for the controlled live test (recommended: `haiku`, then repeat on `sonnet` for comparison) and the effort level (the model default is `medium` on Haiku 5.5; `low` is cheaper for chat).
+- Confirm the default spend limits ($0.25 per run, $1 per day, $5 in total) or set others in `.env`.
+- Model availability (`claude-haiku-5-5`, `claude-sonnet-5-5`) is verified against the owner's account with `agent/Check-AgentSetup.ps1 -VerifyModels` before the first live test.
