@@ -127,8 +127,8 @@ sequenceDiagram
 
 - A proposal is **only a record**. The agent has no tool that writes to a ticket.
 - Approval is applied by the dashboard in the browser (demo tickets live in the browser), so approving does not touch Airtable or Make.
-- A proposal can create a ticket. On approval the dashboard creates the demo ticket and the conversation is linked to the new ticket id, after which the conversation shows in that ticket's details.
-- Emergency safety guidance is the one case that is not held for review (`agent/EMERGENCY_RULES.md`): the approved message is sent to the tenant at once, and the ticket change is still a proposal.
+- A proposal always targets an **existing demo ticket** (the tenant picks one of their open demo requests; the agent never creates tickets). The conversation is stored under that ticket from the start, so it shows in the ticket details immediately. A proposal carries the agent's AI urgency (Routine, Urgent, Emergency) as a separate internal field; it does not overwrite the ticket Priority.
+- **Tenant replies are delivered immediately and are never held for review.** Only the proposed ticket modification waits for the manager. Emergency guidance is likewise never delayed.
 
 ## 5. Data sources and trust
 
@@ -197,9 +197,9 @@ Input and output schemas are in `SPEC.MD`.
 
 - API: Anthropic Messages API with tool use, called from `serve.ps1` with `Invoke-RestMethod`.
 - Model: configurable in `.env`; the starting model is Claude Haiku 5.5 with switching to Claude Sonnet 5.5. The exact model identifiers and their availability on the account are to be confirmed against the API when the key is configured. No final production model is chosen.
-- The system prompt is the verbatim tested Playground prompt stored in the repo (`agent/system-prompt.draft.md`, no secrets in it), plus a separate connected-mode addendum that is not written yet. The addendum is tested before use (`agent/AGENT_SPEC.md` section 8).
+- The system prompt is the verbatim tested Playground prompt stored in the repo (`agent/system-prompt.draft.md`, no secrets in it), followed by the separate connected-mode addendum (`agent/system-prompt.connected-addendum.md`, draft awaiting the owner's approval) that defines tool access, visibility, conversation memory, manager approval and the ban on claiming unexecuted actions. The server joins the two files at run time and stores their hashes with each conversation. The addendum is tested before use (`agent/AGENT_SPEC.md` section 8).
 - **Conversation memory:** the API is stateless, so on each tenant message the server rebuilds the message list from the stored conversation in `agent-data/` before calling the model; this is what keeps the one-time introduction, earlier refusals and unconfirmed resolution consistent.
-- Tenant replies are plain text (no Markdown) and the first chat is text only.
+- Tenant replies are plain text (no Markdown) and the first chat is text only. Photo upload is deferred, but selective photo requests and message attachments remain in the planned architecture (an empty attachments list is reserved in the stored message, and an upload route is planned). Until uploads exist, the agent does not ask for photos or claim to have received one.
 
 ## 9. What stays out of scope
 

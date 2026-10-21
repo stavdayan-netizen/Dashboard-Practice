@@ -2,9 +2,9 @@
 
 **Status:** this is the complete system prompt as tested in the Anthropic Playground with Claude Sonnet 5.5 and Claude Haiku 5.5, supplied by the project owner on 2026-10-21. It replaces the earlier repository draft. The text between the markers below is **verbatim and must not be edited** without the owner's approval and a new round of testing. Everything outside the markers is repository documentation.
 
-**Authority.** This prompt is the authoritative specification of the agent's behavior. `EMERGENCY_RULES.md` remains the safety floor: where the two differ in a way that could make the agent less safe, the stricter rule applies until the owner resolves the difference. The known differences are listed in `AGENT_SPEC.md` section 7 and `EMERGENCY_RULES.md` section 9.
+**Authority.** This prompt is the authoritative specification of the agent's behavior. `EMERGENCY_RULES.md` remains the safety floor: where the two differ in a way that could make the agent less safe, the stricter rule applies. The owner's decisions on the differences are recorded in `AGENT_SPEC.md` section 7 and `EMERGENCY_RULES.md` section 9.
 
-**This is a Playground-only prompt.** It describes a simulation with no tools, no records and no ticket access. The connected agent (Task 3) will use this text unchanged as its base plus a separate **connected-mode addendum** that is not written yet (tools, conversation memory, proposals, text-only chat; see `AGENT_SPEC.md` section 8). Do not edit the verbatim text to add tools.
+**This is a Playground-only prompt.** It describes a simulation with no tools, no records and no ticket access. The connected agent (Task 3) will use this text unchanged as its base plus the separate **connected-mode addendum** in `system-prompt.connected-addendum.md` (tools, visibility, conversation memory, manager approval, text-only chat), which is included in the runtime system prompt after this text; it is a draft awaiting the owner's approval (see `AGENT_SPEC.md` section 8). Do not edit the verbatim text to add tools.
 
 Nothing here is configured in the Anthropic Platform or connected to the dashboard. No account or key is required to read it.
 
@@ -330,6 +330,6 @@ Focus on demonstrating:
 ## Notes for whoever builds the connected agent
 
 - Create and configure the agent in the Anthropic Platform or call the Messages API only when the project owner asks. This file needs no account, key or configuration.
-- Keep the verbatim prompt as the base file. Put everything the connected system adds (tool use, how records arrive, conversation memory, proposals, text-only chat, no Playground "simulation" statements) in a separate addendum so the tested wording stays intact. The addendum is specified in `AGENT_SPEC.md` section 8 and must be re-tested in the Playground before a model is chosen.
+- Keep the verbatim prompt as the base file. Put everything the connected system adds (tool use, how records arrive, conversation memory, proposals, text-only chat, no Playground "simulation" statements) in a separate addendum so the tested wording stays intact. The addendum is `system-prompt.connected-addendum.md` (draft, specified in `AGENT_SPEC.md` section 8) and must be re-tested in the Playground before a model is chosen.
 - Run the twelve emergency scenarios in `EMERGENCY_RULES.md` section 7 (release gates) and the functional scenarios in `AGENT_SPEC.md` section 6 against the final prompt plus addendum.
-- Open conflicts between this prompt and the safety rules: `AGENT_SPEC.md` section 7.
+- Decisions on the differences between this prompt and the safety rules: `AGENT_SPEC.md` section 7.
