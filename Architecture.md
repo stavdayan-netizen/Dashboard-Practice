@@ -137,7 +137,7 @@ sequenceDiagram
 | Tickets and ticket details | `demo/tickets.csv`, `demo/ticket_details.json` | Baseline only |
 | Equipment and history | `demo/equipment.json`, `demo/equipment_history.json`, linked tickets | History is built from tickets, as in the dashboard |
 | Utilities and shutoffs | `demo/utilities.json`, `demo/shutoffs.json` | Contact and shutoff use follows `agent/EMERGENCY_RULES.md` |
-| Manufacturer guidance **[planned]** | `demo/manuals.json` | Official links, exact models, page or section references, short summaries. No manufacturer PDFs are stored in Git |
+| Manufacturer guidance (built 2026-10-21) | `demo/manuals.json` | Official links, exact models, page or section references, short summaries. No manufacturer PDFs are stored in Git |
 | Conversations and proposals **[planned]** | `agent-data/` | Local, Git-ignored |
 
 **Browser-supplied data is not trusted.** The demo's manager edits and tenant-created tickets live in browser storage, which the server cannot see. For the local demo the server therefore:

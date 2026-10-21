@@ -3,13 +3,13 @@
   "fictional": true,
   "property_id": "recBuim4HdvIeouCI",
   "property": "10 Harbor View",
-  "note": "Fictional equipment for the demo. Brands, models, serials, phone numbers and websites are invented (phones use 555-01xx, sites use example.com). null means unknown or not entered.",
+  "note": "Fictional equipment for the demo. Four items (refrigerator, dishwasher, washing machine, gas furnace) carry a real manufacturer and exact model, linked to demo/manuals.json; every other brand and model is invented. Serial numbers (FICT-...), dates, sellers, installers, phones (555-01xx) and websites (example.com) are always invented. null means unknown or not entered.",
   "records": [
     {
       "id": "eq-hv-fridge", "category": "Appliances", "type": "Refrigerator", "is_custom_type": false,
       "presence": "Yes", "ownership": "Landlord",
-      "brand": "Kestrel", "model": "KR-2100", "serial_number": "KR21-FICT-0001",
-      "manufacture_year": 2021, "manufacture_year_accuracy": "Exact",
+      "brand": "GE", "model": "GTS18GTHWW", "serial_number": "FICT-GTHW-0001",
+      "manufacture_year": 2019, "manufacture_year_accuracy": "Estimated",
       "purchase_date": "2021-03-12", "seller": "Harbor Appliance Outlet",
       "installation_date": "2021-03-20", "installation_company": "Metro Appliance Repair",
       "installer_contact": { "name": "Dana Pryor", "phone": "555-0142", "email": "service@example.com", "website": "https://example.com/metro-appliance" },
@@ -23,7 +23,7 @@
         "warranty_docs": [ { "id": "demo-att-fridge-warranty", "filename": "refrigerator-warranty.svg", "mime": "image/svg+xml", "path": "demo/files/warranty-fridge.svg" } ]
       },
       "notes": "Freezer door gasket realigned under warranty in July 2026.",
-      "information_status": "Verified", "visibility": "Tenant Accessible", "details": {}
+      "information_status": "Verified", "visibility": "Tenant Accessible", "manual_id": "man-ge-gts18gthww", "details": {}
     },
     {
       "id": "eq-hv-range", "category": "Appliances", "type": "Range/Stove", "is_custom_type": false,
@@ -52,14 +52,14 @@
     {
       "id": "eq-hv-dishwasher", "category": "Appliances", "type": "Dishwasher", "is_custom_type": false,
       "presence": "Yes", "ownership": "Landlord",
-      "brand": "Northfield", "model": null, "serial_number": null,
-      "manufacture_year": 2016, "manufacture_year_accuracy": "Estimated",
+      "brand": "GE", "model": "GDF530PSMSS", "serial_number": null,
+      "manufacture_year": 2019, "manufacture_year_accuracy": "Estimated",
       "purchase_date": null, "seller": null, "installation_date": null, "installation_company": null,
       "installer_contact": { "name": null, "phone": null, "email": null, "website": null },
       "product_warranty": { "description": null, "expires": null }, "workmanship_warranty": { "description": null, "expires": null },
       "location": "Kitchen",
       "attachments": { "photos": [], "receipts": [], "manuals": [], "warranty_docs": [] },
-      "notes": "Door gasket on order (September 2026).", "information_status": "Estimated", "visibility": "Tenant Accessible", "details": {}
+      "notes": "Door gasket on order (September 2026).", "information_status": "Estimated", "visibility": "Tenant Accessible", "manual_id": "man-ge-gdf530psmss", "details": {}
     },
     {
       "id": "eq-hv-microwave", "category": "Appliances", "type": "Microwave", "is_custom_type": false,
@@ -76,14 +76,14 @@
     {
       "id": "eq-hv-washer", "category": "Appliances", "type": "Washing Machine", "is_custom_type": false,
       "presence": "Yes", "ownership": "Tenant",
-      "brand": "Brightline", "model": null, "serial_number": null,
+      "brand": "GE", "model": "GTW465ASNWW", "serial_number": null,
       "manufacture_year": null, "manufacture_year_accuracy": "Unknown",
       "purchase_date": null, "seller": null, "installation_date": null, "installation_company": null,
       "installer_contact": { "name": null, "phone": null, "email": null, "website": null },
       "product_warranty": { "description": null, "expires": null }, "workmanship_warranty": { "description": null, "expires": null },
       "location": "Laundry area",
       "attachments": { "photos": [], "receipts": [], "manuals": [], "warranty_docs": [] },
-      "notes": "Owned by the tenant, so repairs are the tenant's responsibility.", "information_status": "Estimated", "visibility": "Tenant Accessible", "details": {}
+      "notes": "Owned by the tenant, so repairs are the tenant's responsibility.", "information_status": "Estimated", "visibility": "Tenant Accessible", "manual_id": "man-ge-gtw465asnww", "details": {}
     },
     {
       "id": "eq-hv-dryer", "category": "Appliances", "type": "Dryer", "is_custom_type": false,
@@ -100,8 +100,8 @@
     {
       "id": "eq-hv-furnace", "category": "Heating & Cooling", "type": "Gas Furnace", "is_custom_type": false,
       "presence": "Yes", "ownership": "Landlord",
-      "brand": "Alderwood", "model": "AW-80", "serial_number": "AW80-FICT-0007",
-      "manufacture_year": 2017, "manufacture_year_accuracy": "Exact",
+      "brand": "Goodman", "model": "GMES800803BN", "serial_number": "FICT-GMES-0007",
+      "manufacture_year": 2017, "manufacture_year_accuracy": "Estimated",
       "purchase_date": "2017-10-20", "seller": "Comfort Air Services",
       "installation_date": "2017-11-02", "installation_company": "Comfort Air Services",
       "installer_contact": { "name": "Reese Calloway", "phone": "555-0151", "email": "dispatch@example.com", "website": "https://example.com/comfort-air" },
@@ -112,7 +112,7 @@
         "photos": [ { "id": "demo-att-furnace-photo", "filename": "furnace-photo.svg", "mime": "image/svg+xml", "path": "demo/files/photo-furnace.svg" } ],
         "receipts": [], "manuals": [], "warranty_docs": []
       },
-      "notes": "Annual inspection each autumn.", "information_status": "Verified", "visibility": "Tenant Accessible",
+      "notes": "Annual inspection each autumn.", "information_status": "Verified", "visibility": "Tenant Accessible", "manual_id": "man-goodman-gmes800803bn",
       "details": { "system_kind": "Heating", "system_type": "Gas Furnace", "fuel": "Natural gas" }
     },
     {

@@ -1,0 +1,217 @@
+{
+  "schema": "manuals.v1",
+  "fictional": false,
+  "property_id": "recBuim4HdvIeouCI",
+  "note": "Registry of verified manufacturer documents for the real brands and exact models used in the demo equipment. The manufacturers and models, the document titles, numbers and URLs, and the page references are real and were checked against the manufacturer's own pages. The equipment records that link here (demo/equipment.json) remain fictional: serials, dates, sellers and installers are invented. The guidance below is a short paraphrase written for this project, not manufacturer text, and no manufacturer PDF is stored in this repository. Every tenant_safe_checks item comes from the cited page; the assistant must still apply its own safety rules (it never tells a tenant to operate a breaker or fuse, a shutoff, or to open or repair equipment).",
+  "verified_on": "2026-10-21",
+  "matching_rules": [
+    "Use a manual only when this registry links it to the equipment record (manual_id) and manual_status is verified.",
+    "The equipment record's brand and model must equal manufacturer and model here. A record without an exact model never matches.",
+    "coverage says how the document names the model: model-level means the model or its exact family prefix is printed on the cover or in the model list; series-level means the cover names a series and the manufacturer's own model page links the document to this exact model.",
+    "When manual_status is unavailable the tool returns no guidance and the reason; the assistant may use only basic safe checks and must not claim manufacturer authority."
+  ],
+  "records": [
+    {
+      "manual_id": "man-ge-gts18gthww",
+      "equipment_id": "eq-hv-fridge",
+      "manual_status": "verified",
+      "manufacturer": "GE Appliances",
+      "brand": "GE",
+      "model": "GTS18GTHWW",
+      "product_name": "GE 17.5 Cu. Ft. Top-Freezer Refrigerator",
+      "model_production_window": "October 2014 to November 2019 (from the GE model page)",
+      "document": {
+        "title": "Owner's Manual & Installation Instructions, Refrigerators, Top-Freezer (GTS18, GTS21 Models)",
+        "document_number": "49-60780-2",
+        "revision_date": "05-18",
+        "language": "en",
+        "total_pdf_pages": 56
+      },
+      "official_source": {
+        "model_support_page": "https://products.geappliances.com/appliance/gea-specs/GTS18GTHWW/support",
+        "document_url": "https://images.salsify.com/image/upload/s--yNKfpiXf--/a84559c573c5537f01560cf8d0132d8c36749aaf.pdf",
+        "document_host_note": "images.salsify.com is the file host that GE's own model support page links to for this model's Owner's Manual."
+      },
+      "verification": {
+        "verified_on": "2026-10-21",
+        "method": "Opened GE's support page for GTS18GTHWW (title, production window, Owner's Manual link), downloaded the linked PDF to a temporary local file, and read the cover, safety, temperature control and troubleshooting pages. The PDF is not stored in the repository.",
+        "coverage": "series-level",
+        "coverage_detail": "The cover names GTS18 and GTS21 models; the full model number is not printed. GE's model page lists this document as the model's Owner's Manual.",
+        "model_printed_in_document": false,
+        "record_model_verified": true
+      },
+      "guidance": {
+        "topics": [
+          {
+            "topic_id": "not-cooling-or-too-warm",
+            "keywords": ["not cooling", "not cold", "too warm", "warm", "does not operate", "food spoiling", "freezer warm"],
+            "tenant_safe_checks": [
+              { "order": 1, "text": "Check that no package or food item is holding a door open, and that nothing is pushed against the cold-air vent at the back of the compartment, since blocked airflow gives uneven temperatures.", "pages": [5, 14, 15] },
+              { "order": 2, "text": "Check the temperature control: it must not be turned to OFF, and in warm weather or with frequent door openings the manual suggests setting it one step colder.", "pages": [5, 14] },
+              { "order": 3, "text": "If the refrigerator was just plugged in or loaded with a lot of food, allow up to 24 hours to cool down fully; if it is in a defrost cycle, wait about 30 minutes.", "pages": [14] },
+              { "order": 4, "text": "Check that the plug is pushed fully into the outlet (no extension cord), only if the area is dry and the plug and cord look undamaged.", "pages": [3, 14] }
+            ],
+            "professional_only_or_restricted": [
+              { "text": "Replacing a fuse or resetting a breaker is listed in the manual, but the assistant does not direct tenants to operate fuses or breakers; refer this to the property manager.", "pages": [14] },
+              { "text": "Any repair or work on refrigerator parts must be done by a qualified service professional.", "pages": [3] },
+              { "text": "A clogged water supply line or shutoff valve for the ice maker is a plumber's job.", "pages": [15] }
+            ],
+            "warnings": [
+              { "text": "Unplug the refrigerator before repairs, cleaning or changing a bulb; repairs must be done by a qualified service professional.", "pages": [3] },
+              { "text": "Do not use an extension cord.", "pages": [3] }
+            ],
+            "normal_behavior": [
+              { "text": "A compressor that runs for long periods, fans spinning faster after loading, clicking, cracking or gurgling sounds, and warm air under the refrigerator are normal.", "pages": [13, 14, 15] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "manual_id": "man-ge-gdf530psmss",
+      "equipment_id": "eq-hv-dishwasher",
+      "manual_status": "verified",
+      "manufacturer": "GE Appliances",
+      "brand": "GE",
+      "model": "GDF530PSMSS",
+      "product_name": "GE ENERGY STAR Front Control with Plastic Interior Dishwasher with Sanitize Cycle & Dry Boost",
+      "model_production_window": "August 2018 to July 2021 (from the GE model page)",
+      "document": {
+        "title": "Owner's Manual, Dishwashers (GDF530 Series, GDF630-640 Series, GDT535-635 Series, GDP615 Series)",
+        "document_number": "49-4000239",
+        "revision": "Rev 1",
+        "revision_date": "02-21",
+        "language": "en",
+        "total_pdf_pages": 72
+      },
+      "official_source": {
+        "model_support_page": "https://products.geappliances.com/appliance/gea-specs/GDF530PSMSS/support",
+        "document_url": "https://images.salsify.com/image/upload/s--is-cXSHS--/da518f9c79ea9964e31d77b9507d3da12a3db05f.pdf",
+        "document_host_note": "images.salsify.com is the file host that GE's own model support page links to for this model's Owner's Manual."
+      },
+      "verification": {
+        "verified_on": "2026-10-21",
+        "method": "Opened GE's support page for GDF530PSMSS (title, production window, Owner's Manual link), downloaded the linked PDF to a temporary local file, read the cover, safety, care and cleaning, and troubleshooting pages, and searched the whole text for the model family.",
+        "coverage": "series-level",
+        "coverage_detail": "The cover names the GDF530 Series and the loading pages list GDF530 models; the full model number is not printed.",
+        "model_printed_in_document": false,
+        "record_model_verified": true,
+        "rejected_candidates": [
+          "GE's page for GDF510PSMSS links a different revision of the same document (Rev 0, 09-20, covering the GDF530, GDF630-640, GDT535-635 and GDP615 series). The text never mentions GDF510, so that model was not used."
+        ]
+      },
+      "guidance": {
+        "topics": [
+          {
+            "topic_id": "not-draining",
+            "keywords": ["not draining", "won't drain", "standing water", "water in the bottom", "water won't pump out", "dishwasher full of water"],
+            "tenant_safe_checks": [
+              { "order": 1, "text": "Check whether the kitchen sink drains well. If the sink is also slow or backed up, the household drain is the likely cause and a plumber may be needed.", "pages": [21] },
+              { "order": 2, "text": "If the home has an air gap (a small fitting on the sink or counter that is not part of the dishwasher), turn off the dishwasher, lift off the cover, remove the plastic cap, clean it with a toothpick, then replace the cap and cover.", "pages": [17, 21], "applies_if": "the tenant says the home has an air gap" },
+              { "order": 3, "text": "If the dishwasher drains into a garbage disposer, run the disposer clear.", "pages": [21], "applies_if": "a disposer is installed (the demo has none: eq-hv-disposal presence is No)" },
+              { "order": 4, "text": "Clean the filters: remove the bottom rack, twist and lift out the ultra-fine filter and the fine filter, rinse them in warm soapy water, and put them back and lock them. Wait at least 20 minutes after a cycle so the heating elements have cooled. Keep the small retaining posts away from children.", "pages": [17, 21], "applies_if": "the tenant is comfortable doing routine filter care and the dishwasher is not running; the assistant does not tell tenants to switch off a breaker, and offers this only as the manual's user maintenance" }
+            ],
+            "professional_only_or_restricted": [
+              { "text": "A missing high drain loop or air gap is an installation problem; the manual refers to the installation instructions.", "pages": [21] },
+              { "text": "Do not repair or replace any part that the manual does not recommend; other servicing is for a qualified technician.", "pages": [3] }
+            ],
+            "warnings": [
+              { "text": "Disconnect the appliance from power before maintenance; turning the dishwasher off at the control does not disconnect it. (The assistant does not direct tenants to operate breakers or fuses, so it limits tenant steps to the checks above and refers anything else to the property manager.)", "pages": [3] },
+              { "text": "Wait at least 20 minutes after a cycle before cleaning the interior; the heating elements can cause burns.", "pages": [21] },
+              { "text": "Do not touch the heating element during or right after use.", "pages": [3] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "manual_id": "man-ge-gtw465asnww",
+      "equipment_id": "eq-hv-washer",
+      "manual_status": "verified",
+      "manufacturer": "GE Appliances",
+      "brand": "GE",
+      "model": "GTW465ASNWW",
+      "product_name": "GE 4.5 cu. ft. Capacity Washer with Stainless Steel Basket",
+      "model_production_window": "February 2019 to March 2024 (from the GE model page)",
+      "document": {
+        "title": "Owner's Manual & Installation Instructions, Washers (cover lists GTW540, GTW538, GTW525, GTW500, GTW490, GTW485, GTW480, GTW465, GTW385, GTW335, GTW325, GTW220, HTW265, HTW240)",
+        "document_number": "49-3000373",
+        "revision": "Rev 1",
+        "revision_date": "09-24",
+        "language": "en",
+        "total_pdf_pages": 60
+      },
+      "official_source": {
+        "model_support_page": "https://products.geappliances.com/appliance/gea-specs/GTW465ASNWW/support",
+        "document_url": "https://images.salsify.com/image/upload/s--AKgAhUAs--/r4yctjlrytehsjedypih.pdf",
+        "document_host_note": "images.salsify.com is the file host that GE's own model support page links to for this model's Owner's Manual."
+      },
+      "verification": {
+        "verified_on": "2026-10-21",
+        "method": "Opened GE's support page for GTW465ASNWW (title, production window, Owner's Manual link), downloaded the linked PDF to a temporary local file, read the cover, safety pages and the troubleshooting chart, and searched the text for the model family.",
+        "coverage": "model-level",
+        "coverage_detail": "The cover lists the GTW465 family and the cycle text names the GTW465 model; the full model number is not printed.",
+        "model_printed_in_document": false,
+        "record_model_verified": true
+      },
+      "guidance": {
+        "topics": [
+          {
+            "topic_id": "not-draining",
+            "keywords": ["won't drain", "not draining", "water in the tub", "water left in washer", "standing water"],
+            "tenant_safe_checks": [
+              { "order": 1, "text": "If water remains in the washer, select the Drain & Spin cycle to drain the basket and spin the water out.", "pages": [8] },
+              { "order": 2, "text": "Look for a kinked drain hose or a washer sitting on the hose; straighten it only if you can do so without moving or lifting the machine.", "pages": [24] },
+              { "order": 3, "text": "If the cycle was cancelled because the lid was left open for a long time, close the lid, choose a new cycle and press Start.", "pages": [4, 24] }
+            ],
+            "professional_only_or_restricted": [
+              { "text": "Drain outlet height, the anti-siphon clip and drain hose installation are installation matters; the top of the drain outlet should be less than 8 ft above the floor.", "pages": [24] },
+              { "text": "If the household drain seems clogged, check the household plumbing; a plumber may be needed.", "pages": [24] },
+              { "text": "Do not repair, replace parts or service the washer unless the manual's user instructions say so; unplug or turn off the breaker before servicing (the assistant does not direct tenants to operate breakers, so servicing is referred to the owner).", "pages": [3] }
+            ],
+            "warnings": [
+              { "text": "Do not reach into the washer while the tub or agitator is moving.", "pages": [3] },
+              { "text": "Do not operate the washer if it is damaged, malfunctioning, partly disassembled or has missing parts, including a damaged cord or plug.", "pages": [3] },
+              { "text": "Pressing the Start button does not disconnect power.", "pages": [3] }
+            ],
+            "ownership_note": "In the demo this washer belongs to the tenant (eq-hv-washer notes), so repairs are the tenant's responsibility."
+          }
+        ]
+      }
+    },
+    {
+      "manual_id": "man-goodman-gmes800803bn",
+      "equipment_id": "eq-hv-furnace",
+      "manual_status": "unavailable",
+      "manufacturer": "Goodman Manufacturing Company, L.P.",
+      "brand": "Goodman",
+      "model": "GMES800803BN",
+      "product_name": "Single-Stage, Multi-Speed ECM, Multi-Position Gas Furnace, 80% AFUE (GMES80), natural gas",
+      "specifications": {
+        "heating_input_btu_per_hour": 80000,
+        "natural_gas_output_btu_per_hour": 64000,
+        "afue_percent": 80,
+        "source": "Goodman spec sheet SS-GMES80/GCES80, 2/20 (supersedes 11/19), page 3, column GMES800803B*"
+      },
+      "document": null,
+      "official_source": {
+        "spec_sheet_url": "https://apps.goodmanmfg.com/brochures/files/5e8c8e418dd68SS-GMES80_GCES80.pdf"
+      },
+      "verification": {
+        "verified_on": "2026-10-21",
+        "method": "Read the manufacturer's spec sheet. Its page 3 lists the base model GMES800803B* (80,000 BTU/h input) and page 2 gives the nomenclature in which the 12th character N means natural gas, which gives GMES800803BN. Characters 13 and 14 (revision) are not specified.",
+        "coverage": "none",
+        "model_printed_in_document": false,
+        "record_model_verified": true,
+        "reason_manual_unavailable": "No owner-facing manual for the GMES80 could be verified on a Goodman-controlled page. Goodman's 80% AFUE furnace page does not list the GMES80, the GMES80 page address returned 404, and the literature library could not be searched in this pass. The spec sheet and Goodman's technician service literature are not tenant guidance. Third-party copies were not used.",
+        "rejected_candidates": [
+          "A Carrier condensing gas furnace owner's manual (Carrier Comfort 92, 59SC2 series) is a different manufacturer and model family and must not be used for this furnace.",
+          "Third-party hosted copies of Goodman installation manuals were not used because their match to this exact model and revision cannot be confirmed from a Goodman page."
+        ]
+      },
+      "guidance": {
+        "topics": []
+      }
+    }
+  ]
+}

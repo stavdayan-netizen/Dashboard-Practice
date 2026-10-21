@@ -1,6 +1,6 @@
 # Demo data pack: 10 Harbor View (fictional)
 
-Everything in this folder is **fictional test data**. It is used by the dashboard's demo mode and, later, by the AI Maintenance Agent tests. It is never read from or written to Airtable, and no real property, tenant, vendor, phone number or email is in it (phones use `555-01xx`, emails and websites use `example.com`).
+Everything in this folder is **fictional test data**, with one exception: `manuals.json` points at real manufacturer documents for four equipment items (see the last section). It is used by the dashboard's demo mode and, later, by the AI Maintenance Agent tests. It is never read from or written to Airtable, and no real property, tenant, vendor, phone number or email is in it (phones use `555-01xx`, emails and websites use `example.com`).
 
 Open it with `index.html?demo=1` (needs a web server, for example `serve.ps1` then `http://localhost:8531/?demo=1`, or the GitHub Pages address with `?demo=1`). Without `?demo=1` the dashboard behaves exactly as before and uses the real Airtable data.
 
@@ -14,7 +14,8 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 | `properties.json` | The one property (copied from Airtable, read-only) | Dashboard demo mode (address for weather) |
 | `tickets.csv` | 30 tickets in the standard 13-column format (13 open, 17 resolved or closed), using all seven demo statuses | Dashboard demo mode, same validation as every other source |
 | `ticket_details.json` | Extra fields per ticket: emergency flag, AI handling status, internal notes, vendor brief, repair date and summary, **receipts**, **equipment links** and attachments | Ticket details, equipment history, agent |
-| `equipment.json` | 22 equipment records across the planned categories | Systems & Equipment view, agent |
+| `equipment.json` | 22 equipment records across the planned categories; four of them (refrigerator, dishwasher, washing machine, gas furnace) carry a real manufacturer and exact model and a `manual_id` | Systems & Equipment view, agent |
+| `manuals.json` | Registry of verified manufacturer documents for those four items: official page and document links, document numbers, page references, short tenant-safe guidance written in our own words, and a clear `unavailable` entry for the furnace. No manufacturer PDF is stored | Agent (`get_equipment_manual_guidance`) |
 | `equipment_history.json` | 7 manual events that have **no ticket** (purchases, installations, inspections) | Equipment history |
 | `utilities.json` | Gas, Electric, Water, Sewer, Trash | Systems & Equipment, agent |
 | `shutoffs.json` | Water, gas, electrical and other shutoffs | Systems & Equipment, agent |
@@ -63,3 +64,22 @@ The files mirror the planned tables, so moving to production means swapping the 
 ## Rules
 - Do not add real data here. Do not put credentials, API keys or webhook URLs in these files.
 - Do not copy this data into the real Airtable tables.
+
+## Real brands and verified manuals (Stage 3, 2026-10-21)
+Four equipment items use a **real manufacturer and exact model** so the agent's manual retrieval can be tested against real, checkable documents. Everything else about them stays fictional (serial numbers read `FICT-...`, dates, sellers, installers, phones, websites), and the other 18 items keep invented brands.
+
+| Item | Brand and model | Document (verified 2026-10-21) | Coverage |
+| --- | --- | --- | --- |
+| Refrigerator (`eq-hv-fridge`) | GE GTS18GTHWW | Owner's Manual, 49-60780-2 (05-18) | Series-level (cover names GTS18, GTS21); GE's model page links it |
+| Dishwasher (`eq-hv-dishwasher`) | GE GDF530PSMSS | Owner's Manual, 49-4000239 Rev 1 (02-21) | Series-level (GDF530 Series); GE's model page links it |
+| Washing machine (`eq-hv-washer`) | GE GTW465ASNWW | Owner's Manual, 49-3000373 Rev 1 (09-24) | Model-level (cover lists GTW465) |
+| Gas furnace (`eq-hv-furnace`) | Goodman GMES800803BN | **No owner manual verified** (spec sheet SS-GMES80/GCES80 2/20 verifies the model) | None: used to test the "no manual" path |
+
+How it was checked: each model's page on the manufacturer's own site was opened for the product name, production window and the Owner's Manual link; the linked PDF was downloaded to a temporary file (not kept) and its cover, safety and troubleshooting pages were read. See the `verification` block of each entry in `manuals.json`.
+
+Things to know:
+- **Dates were adjusted to the models.** The refrigerator's production window ended in November 2019, so its manufacture year is now an estimated 2019 (the demo purchase in March 2021 reads as outlet stock). The dishwasher's window is August 2018 to July 2021, so its estimated year is 2019. Ticket links, history events, warranties and receipts are unchanged.
+- **The furnace's installation year (2017) is not verified against the model's introduction**, so its year accuracy is now Estimated.
+- **The refrigerator's current GE manual (Rev. 11, 09-26) has no cooling troubleshooting chart**, so the older manual that GE links for GTS18GTHWW is the one registered.
+- GE's page for GDF510PSMSS links a different revision of the dishwasher manual that never mentions GDF510, so that model was not used.
+- `manual-fridge.svg`, `warranty-fridge.svg` and `receipt-fridge.svg` remain fictional placeholder pictures; they are not the manufacturer documents.
