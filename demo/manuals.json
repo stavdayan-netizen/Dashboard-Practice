@@ -180,37 +180,61 @@
       }
     },
     {
-      "manual_id": "man-goodman-gmes800803bn",
+      "manual_id": "man-trane-s9v2b040u3psca",
       "equipment_id": "eq-hv-furnace",
-      "manual_status": "unavailable",
-      "manufacturer": "Goodman Manufacturing Company, L.P.",
-      "brand": "Goodman",
-      "model": "GMES800803BN",
-      "product_name": "Single-Stage, Multi-Speed ECM, Multi-Position Gas Furnace, 80% AFUE (GMES80), natural gas",
-      "specifications": {
-        "heating_input_btu_per_hour": 80000,
-        "natural_gas_output_btu_per_hour": 64000,
-        "afue_percent": 80,
-        "source": "Goodman spec sheet SS-GMES80/GCES80, 2/20 (supersedes 11/19), page 3, column GMES800803B*"
+      "manual_status": "verified",
+      "manufacturer": "Trane",
+      "brand": "Trane",
+      "model": "S9V2B040U3PSCA",
+      "product_name": "Trane S9V2 non-weatherized gas furnace, natural gas / propane, 96.0 AFUE (ENERGY STAR)",
+      "model_production_window": "not published on the pages used",
+      "document": {
+        "title": "Gas Heating Systems - Owner's Information",
+        "document_number": "32-5083-1C-EN",
+        "revision_date": "2024 (file dated 05/21/2024)",
+        "language": "en",
+        "total_pdf_pages": 4
       },
-      "document": null,
       "official_source": {
-        "spec_sheet_url": "https://apps.goodmanmfg.com/brochures/files/5e8c8e418dd68SS-GMES80_GCES80.pdf"
+        "owner_manuals_page": "https://www.trane.com/residential/en/resources/owners-guides/",
+        "document_url": "https://live-trane-headless-cms.pantheonsite.io/wp-content/uploads/2024/07/32-5083-1C-EN_05212024.pdf",
+        "model_evidence_url": "https://www.trane.com/residential/en/assets/energy-guide/furnaces/S9V2-FUR/S9V2B040U3PSCA.pdf",
+        "document_host_note": "The document address is the one that Trane's own Owner's Manuals page links to for 'Gas heating systems'."
       },
       "verification": {
         "verified_on": "2026-10-21",
-        "method": "Read the manufacturer's spec sheet. Its page 3 lists the base model GMES800803B* (80,000 BTU/h input) and page 2 gives the nomenclature in which the 12th character N means natural gas, which gives GMES800803BN. Characters 13 and 14 (revision) are not specified.",
-        "coverage": "none",
+        "method": "Opened Trane's Owner's Manuals page, which lists one manual, 'Gas heating systems', document 32-5083-1C-EN, applying to 'All models'. Downloaded that PDF to a temporary local file and read all four pages. Separately, Trane's own EnergyGuide asset for this model (a file named S9V2B040U3PSCA.pdf on trane.com) was downloaded and its label read: Trane, furnace, non-weatherized, natural gas and propane gas, Model S9V2B040U3PS***, AFUE 96.0, ENERGY STAR. The files are not stored in the repository.",
+        "coverage": "series-level",
+        "coverage_detail": "The owner's information is a single Trane document for all gas heating models and does not print model numbers. Trane's EnergyGuide label wildcards the last three characters (S9V2B040U3PS***); the suffix CA comes from the name of Trane's own file for this model, so the final two characters are supported by that file name only.",
         "model_printed_in_document": false,
         "record_model_verified": true,
-        "reason_manual_unavailable": "No owner-facing manual for the GMES80 could be verified on a Goodman-controlled page. Goodman's 80% AFUE furnace page does not list the GMES80, the GMES80 page address returned 404, and the literature library could not be searched in this pass. The spec sheet and Goodman's technician service literature are not tenant guidance. Third-party copies were not used.",
-        "rejected_candidates": [
-          "A Carrier condensing gas furnace owner's manual (Carrier Comfort 92, 59SC2 series) is a different manufacturer and model family and must not be used for this furnace.",
-          "Third-party hosted copies of Goodman installation manuals were not used because their match to this exact model and revision cannot be confirmed from a Goodman page."
-        ]
+        "earlier_candidate_rejected": "Goodman GMES800803BN was used first. A second targeted search of Goodman's sites found the spec sheet (which verifies the model), service literature for technicians, and the literature library page, but no owner manual matched to the model, and Goodman's 80% furnace page does not list the GMES80. It was replaced."
       },
       "guidance": {
-        "topics": []
+        "topics": [
+          {
+            "topic_id": "no-heat-or-weak-heat",
+            "keywords": ["no heat", "not heating", "weak heat", "cold house", "furnace not working", "blower", "heat not coming out"],
+            "tenant_safe_checks": [
+              { "order": 1, "text": "Check the thermostat (comfort control): it should be set to heat, with the temperature set above the room temperature and the fan set to AUTO.", "pages": [2, 3] },
+              { "order": 2, "text": "Check that supply and return registers are open and not blocked by furniture, rugs or other objects, since blocked airflow gives insufficient heating.", "pages": [3] },
+              { "order": 3, "text": "Check the air filter if it is easy to reach without opening the furnace: a dirty filter reduces heating. Disposable filters are replaced with the same size and type, arrows pointing the way the air flows; never run the system with the filter removed. If the tenant does not know where the filter is, do not ask them to look inside the furnace.", "pages": [3], "applies_if": "the filter is accessible without removing any furnace panel" }
+            ],
+            "professional_only_or_restricted": [
+              { "text": "Removing the front panel, turning the manual gas valve on or off, waiting and re-starting the system, and the manual's start-up and shutdown steps are service-level steps. The assistant never gives them to tenants.", "pages": [2, 3] },
+              { "text": "Resetting or replacing a protective device, and the on-off-on-off power sequence for a lockout, are electrical steps. The assistant does not direct tenants to operate breakers, fuses or the furnace power.", "pages": [3] },
+              { "text": "A burner that does not ignite, a defective component, a main gas line that may be off, a plugged condensate drain, a restricted vent, a limit control that makes the unit cycle on and off, a flame rollout or pressure switch shutdown, and unusual noise all need a qualified service technician or the gas supplier.", "pages": [2, 3] },
+              { "text": "If vent or air-intake terminals look blocked, the tenant only reports it; nobody should clear or touch them on the assistant's advice.", "pages": [3] },
+              { "text": "Seasonal inspection of the flue, vent connector, ducts, burner flames and combustion air is for a qualified service agency; do-it-yourself repairs are not recommended.", "pages": [2, 3] }
+            ],
+            "warnings": [
+              { "text": "If anyone smells gas: do not light anything, do not touch electrical switches, leave and get help; this is an emergency handled by the emergency rules, not by troubleshooting.", "pages": [1] },
+              { "text": "Do not use the system if any part has been under water; a flood-damaged unit is extremely dangerous.", "pages": [1] },
+              { "text": "Carbon monoxide: vent and air-intake terminals must not be obstructed; fuel gas and CO detectors are recommended.", "pages": [1, 2, 3] },
+              { "text": "Never remove any panel while the unit is operating, never operate it with doors removed or ajar, and never store flammable liquids or vapors or combustible material near it.", "pages": [1, 2, 3] }
+            ]
+          }
+        ]
       }
     }
   ]

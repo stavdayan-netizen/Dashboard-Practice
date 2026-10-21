@@ -100,7 +100,7 @@
     {
       "id": "eq-hv-furnace", "category": "Heating & Cooling", "type": "Gas Furnace", "is_custom_type": false,
       "presence": "Yes", "ownership": "Landlord",
-      "brand": "Goodman", "model": "GMES800803BN", "serial_number": "FICT-GMES-0007",
+      "brand": "Trane", "model": "S9V2B040U3PSCA", "serial_number": "FICT-S9V2-0007",
       "manufacture_year": 2017, "manufacture_year_accuracy": "Estimated",
       "purchase_date": "2017-10-20", "seller": "Comfort Air Services",
       "installation_date": "2017-11-02", "installation_company": "Comfort Air Services",
@@ -112,7 +112,7 @@
         "photos": [ { "id": "demo-att-furnace-photo", "filename": "furnace-photo.svg", "mime": "image/svg+xml", "path": "demo/files/photo-furnace.svg" } ],
         "receipts": [], "manuals": [], "warranty_docs": []
       },
-      "notes": "Annual inspection each autumn.", "information_status": "Verified", "visibility": "Tenant Accessible", "manual_id": "man-goodman-gmes800803bn",
+      "notes": "Annual inspection each autumn.", "information_status": "Verified", "visibility": "Tenant Accessible", "manual_id": "man-trane-s9v2b040u3psca",
       "details": { "system_kind": "Heating", "system_type": "Gas Furnace", "fuel": "Natural gas" }
     },
     {

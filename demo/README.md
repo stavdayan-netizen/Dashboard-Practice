@@ -15,7 +15,7 @@ It is one of the existing fictional properties in the dashboard (Airtable Proper
 | `tickets.csv` | 30 tickets in the standard 13-column format (13 open, 17 resolved or closed), using all seven demo statuses | Dashboard demo mode, same validation as every other source |
 | `ticket_details.json` | Extra fields per ticket: emergency flag, AI handling status, internal notes, vendor brief, repair date and summary, **receipts**, **equipment links** and attachments | Ticket details, equipment history, agent |
 | `equipment.json` | 22 equipment records across the planned categories; four of them (refrigerator, dishwasher, washing machine, gas furnace) carry a real manufacturer and exact model and a `manual_id` | Systems & Equipment view, agent |
-| `manuals.json` | Registry of verified manufacturer documents for those four items: official page and document links, document numbers, page references, short tenant-safe guidance written in our own words, and a clear `unavailable` entry for the furnace. No manufacturer PDF is stored | Agent (`get_equipment_manual_guidance`) |
+| `manuals.json` | Registry of verified manufacturer documents for those four items: official page and document links, document numbers, page references, short tenant-safe guidance written in our own words,. No manufacturer PDF is stored | Agent (`get_equipment_manual_guidance`) |
 | `equipment_history.json` | 7 manual events that have **no ticket** (purchases, installations, inspections) | Equipment history |
 | `utilities.json` | Gas, Electric, Water, Sewer, Trash | Systems & Equipment, agent |
 | `shutoffs.json` | Water, gas, electrical and other shutoffs | Systems & Equipment, agent |
@@ -73,13 +73,13 @@ Four equipment items use a **real manufacturer and exact model** so the agent's 
 | Refrigerator (`eq-hv-fridge`) | GE GTS18GTHWW | Owner's Manual, 49-60780-2 (05-18) | Series-level (cover names GTS18, GTS21); GE's model page links it |
 | Dishwasher (`eq-hv-dishwasher`) | GE GDF530PSMSS | Owner's Manual, 49-4000239 Rev 1 (02-21) | Series-level (GDF530 Series); GE's model page links it |
 | Washing machine (`eq-hv-washer`) | GE GTW465ASNWW | Owner's Manual, 49-3000373 Rev 1 (09-24) | Model-level (cover lists GTW465) |
-| Gas furnace (`eq-hv-furnace`) | Goodman GMES800803BN | **No owner manual verified** (spec sheet SS-GMES80/GCES80 2/20 verifies the model) | None: used to test the "no manual" path |
+| Gas furnace (`eq-hv-furnace`) | Trane S9V2B040U3PSCA | Gas Heating Systems - Owner's Information, 32-5083-1C-EN (2024) | Series-level (Trane lists it for all gas models); the model is evidenced by Trane's own EnergyGuide file, whose label wildcards the last three characters |
 
 How it was checked: each model's page on the manufacturer's own site was opened for the product name, production window and the Owner's Manual link; the linked PDF was downloaded to a temporary file (not kept) and its cover, safety and troubleshooting pages were read. See the `verification` block of each entry in `manuals.json`.
 
 Things to know:
 - **Dates were adjusted to the models.** The refrigerator's production window ended in November 2019, so its manufacture year is now an estimated 2019 (the demo purchase in March 2021 reads as outlet stock). The dishwasher's window is August 2018 to July 2021, so its estimated year is 2019. Ticket links, history events, warranties and receipts are unchanged.
-- **The furnace's installation year (2017) is not verified against the model's introduction**, so its year accuracy is now Estimated.
+- **The furnace was first Goodman GMES800803BN**, which was replaced because no owner manual matched to it could be found on Goodman's sites after a second targeted search. The Trane replacement keeps the same equipment id, ticket link (`HV-004`), history events and category. Its installation year (2017) is not verified against the model's introduction, so its year accuracy is Estimated. Only the manual's thermostat, register and accessible-filter checks are marked tenant-safe; the gas valve, panel, power-reset and burner steps are recorded as professional-only.
 - **The refrigerator's current GE manual (Rev. 11, 09-26) has no cooling troubleshooting chart**, so the older manual that GE links for GTS18GTHWW is the one registered.
 - GE's page for GDF510PSMSS links a different revision of the dishwasher manual that never mentions GDF510, so that model was not used.
 - `manual-fridge.svg`, `warranty-fridge.svg` and `receipt-fridge.svg` remain fictional placeholder pictures; they are not the manufacturer documents.
