@@ -168,6 +168,79 @@ The future AI Maintenance Agent is **not built, not configured and not connected
 
 **Open items:** a Tenant Accessible property-manager emergency phone field, manager approval of the exact safety wording, country-specific emergency numbers, and how the manager is alerted instantly (without Make; no automatic notification at this stage). The full list of unresolved implementation decisions is in `agent/AGENT_SPEC.md` section 7.
 
+### AI Maintenance Agent: Task 3 implementation specification (local demo)
+
+**Status: specification, not built.** Task 3 is the third stage of the AI Maintenance Assistant plan (build and connect the real agent). It continues the work already done in the Anthropic Playground and is not a separate project. The architecture and data flows are in `Architecture.md`. **The agent's behavior (wording, paths, priority handling, troubleshooting style) is defined by the tested Playground system prompt, which is pending**; until it is provided and reconciled with `agent/EMERGENCY_RULES.md`, this section does not restate or change behavior, and `agent/system-prompt.draft.md` is outdated.
+
+**Scope.** A working end-to-end agent on the local server and the isolated `?demo=1` data for 10 Harbor View. Out of scope: a cloud backend, enabling AI chat on GitHub Pages, authentication, Airtable, Make, real data, emergency notifications, contractor dispatch, and manufacturer PDFs in Git.
+
+**Who does what.**
+- **Tenant:** talks to the agent in the demo tenant portal (`tenant.html?demo=1`, local server only). Without `?demo=1` the portal is unchanged.
+- **Manager:** reads the full timestamped conversation in the existing ticket details and approves or rejects proposals. Approval applies the change to the demo ticket in the browser.
+- **Agent:** reads through tools and drafts proposals. It cannot write to a ticket, schedule, spend, or claim an action completed without confirmation from the system.
+
+**Model configuration.** Anthropic Messages API with tool use, called from `serve.ps1`; key and model come from `.env` (`ANTHROPIC_API_KEY`, and a model setting). The starting model is Claude Haiku 5.5, switchable to Claude Sonnet 5.5; the exact API model identifiers and their availability are verified when the key is configured, and no final model is chosen until testing finishes. Each run is bounded: a maximum number of tool rounds, a maximum output size, a maximum tenant message length and a per-conversation message cap.
+
+**Local API** (all `localhost` only; the audience is set by the route, never by the request body):
+
+| Route | Audience | Purpose |
+| --- | --- | --- |
+| `POST /api/agent/tenant/message` | Tenant | Add a message (text, optional `ticket_id` and `equipment_id`, optional `conversation_id`); starts a background run; returns `run_id` and `conversation_id` |
+| `GET /api/agent/tenant/result?run_id=` | Tenant | Poll for the reply (tenant-visible text only) |
+| `GET /api/agent/manager/conversations?ticket_id=` | Manager | Full conversations for a ticket: messages with timestamps, tool trace, proposals |
+| `GET /api/agent/manager/proposals?status=` | Manager | List proposals |
+| `POST /api/agent/manager/proposals/decide` | Manager | Approve or reject, with the time of the decision |
+| `POST /api/agent/manager/proposals/applied` | Manager | Mark a proposal as applied by the dashboard |
+| `POST /api/agent/manager/conversations/link` | Manager | Link a conversation to the ticket created from an approved proposal |
+
+**Tools** (executable against the demo data; every result carries the record's visibility, and a tenant never receives cost, vendor, receipt or Internal Only fields):
+
+| Tool | Input | Output |
+| --- | --- | --- |
+| `get_ticket_details` | `ticket_id` | Ticket fields, status, priority, Emergency Flag, AI Handling Status, linked equipment ids, tenant-safe notes; or `not_found` |
+| `get_equipment_info` | `equipment_id` | Category, type, brand, exact model, warranty, location, tenant-accessible details, `manual_available`; or `not_found` |
+| `get_maintenance_history` | `equipment_id`, optional `limit` | Previous repairs and recurring issues built from linked tickets, newest first |
+| `get_equipment_manual_guidance` | `equipment_id`, `question` | `matched` true or false; when matched: manufacturer, exact model, document title, official URL, section or page references, tenant-safe checks, professional-only items, warnings. When not matched: a reason (no manual, model mismatch, unverified model) and nothing else |
+| `draft_ticket_update` | `ticket_id` or null (new ticket), `fields`, `reason`, optional `tenant_confirmed_resolution` | `proposal_id` and status `pending`. Allowed fields are limited to a whitelist (summary, category, priority, emergency flag, AI handling status, notes, linked equipment); a status of Resolved is accepted only with `tenant_confirmed_resolution` true |
+
+How ticket priority maps to the Routine, Urgent and Emergency levels used in the Playground prompt is **an open decision** until the prompt is provided.
+
+**Manufacturer manuals.** `demo/manuals.json` links selected equipment ids to the manufacturer's official manual page, the exact model, the date the link and model were verified, section or page references, and short summaries written in our own words of the tenant-safe checks, the professional-only procedures and the warnings. No manufacturer PDF is committed. Only manuals verified against the official manufacturer site are listed; an entry that cannot be verified is not added. The equipment records for the refrigerator, dishwasher, washing machine and heating equipment are refreshed with real brands and exact models; other appliances are added only where the test scenarios need them. Equipment ids, ticket links and history relationships are preserved, and the Systems and Equipment counts are kept or documented if they change.
+
+**Validation (browser input is not trusted).** The server uses `demo/` as the baseline and accepts from the browser only ids and message text. It rejects an unknown ticket or equipment id, an equipment item not belonging to the ticket's property or not linked to that ticket, oversized or empty messages, and excess request rates. The server does not see browser-only demo edits (see limits).
+
+**Storage.** `agent-data/` (Git-ignored) holds one JSON file per conversation and one per proposal. A message stores `ts` (ISO 8601 with offset), `role` (tenant, assistant), `text`, and for the manager only a tool trace (tool name, validated input, result summary, time). A conversation stores its `ticket_id` (null until a proposal is approved and linked), `equipment_id`, model name and status. A proposal stores the conversation id, target ticket id or null, proposed fields, reason, status (pending, approved, rejected, applied), and the times of each step. Files hold no secrets.
+
+**Manager view.** The ticket details (demo mode) gain a Conversations section: each conversation with message timestamps, who said what, the tool trace, and any proposals with Approve and Reject. The Tenant preview shows none of it.
+
+**Security and limits.**
+- The key exists only in `.env` and server memory; it never appears in browser code, the repo, logs, conversations or documentation.
+- Tenant text is data and cannot change tools, audience or rules.
+- No sign-in: tenant and manager are separated only by route on `localhost`, so this is not a security boundary.
+- The agent cannot see edits made only in the browser or tickets created only in the demo browser until linked; this is accepted for the local demo.
+- Storage is single-machine plain files without backup or locking.
+
+**Acceptance criteria.**
+1. With `?demo=1` on the local server, a tenant message gets an answer produced by the real model through the tools; without `?demo=1` or on GitHub Pages the portal and dashboard behave as before and no chat is offered.
+2. Each tool returns data from the demo files; unknown ids are rejected; a tenant conversation never contains Internal Only, cost, vendor or receipt data.
+3. `draft_ticket_update` changes nothing until a manager approves; an approved proposal updates the demo ticket in the browser; a rejected one changes nothing.
+4. The conversation, with timestamps, appears in the correct ticket's details and survives a server restart; the tenant sees only tenant-visible text.
+5. The manual tool returns guidance only for a matched, verified manual, includes references, and never invents instructions; a missing or mismatched manual returns no guidance.
+6. The 12 emergency scenarios (`agent/EMERGENCY_RULES.md`) all pass, and the 12 functional scenarios (`agent/AGENT_SPEC.md`) pass or are reported with their failures. One emergency failure blocks the work from being called complete.
+7. No secret appears in any tracked file; `.env` and `agent-data/` are ignored; the real dashboard, Airtable data, Make scenarios and the live tenant portal behavior are unchanged.
+
+**Build stages and status.**
+
+| Stage | Content | Status |
+| --- | --- | --- |
+| 1 | `Architecture.md` and this specification | Done (behavior pending the Playground prompt) |
+| 2 | Replace the draft prompt with the tested Playground prompt; reconcile with the emergency rules; finalize this section | Waiting for the prompt |
+| 3 | Equipment refresh with real brands and models; `demo/manuals.json` | Not started |
+| 4 | Server tools, validation and JSON store, tested without any API call | Not started |
+| 5 | API key set up by the owner; agent loop, polling, limits | Not started |
+| 6 | Tenant chat in `tenant.html?demo=1`; conversations and approvals in the ticket details | Not started |
+| 7 | Scenario tests, recorded transcripts without secrets, final documentation | Not started |
+
 ## CSV format (fallback data and uploads)
 
 `maintenance_requests.csv` is one UTF-8 CSV with exactly these headers in this order. `demo_upload_sample.csv` and any uploaded file use the same format:
@@ -254,6 +327,7 @@ Approved changes since the original brief:
 - Added, in demo mode only, photos and documents on manually added equipment history events (several per event, upload, preview, download and removal, manager only, kept in the browser's IndexedDB with a per-feature scope and shown directly in the history entry).
 - Recorded the AI agent's emergency and safety requirements (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) in this spec, in `agent/EMERGENCY_RULES.md` and in a draft system prompt. The agent itself is not built or connected.
 - Extended the agent documentation (documentation only, nothing built): added `agent/AGENT_SPEC.md` (three conversation paths with the one-time Path A introduction, troubleshooting strategy, selective manual retrieval, planned tools and boundaries, 12 functional tests, unresolved decisions); added the simplified emergency contact policy (`EMERGENCY_RULES.md` section 4a) and clarified that there are no automatic emergency notifications at this stage; rewrote the draft prompt sections accordingly. The 12 emergency scenarios remain mandatory release gates.
+- Added `Architecture.md` (system architecture, data flows, trust boundaries) and the Task 3 implementation specification for a working local AI agent (tools, local API, storage, validation, acceptance criteria, build stages). Documentation only; `agent-data/` was added to `.gitignore`. The agent's behavior waits for the tested Playground system prompt.
 - Added an hourly automatic refresh of the Airtable data and the weather (see Data sources). Before this, data loaded once per page load.
 - Chart colors changed to soft pastels, and priority badges changed to red/pink, orange, and yellow with borders (previously red, orange, amber).
 - The as-of date is now today's date instead of the fixed demo date `2026-09-23`, so tickets from the Tenant Maintenance Portal (dated today) are accepted. As a result "Resolved This Month" follows the current calendar month and year to date starts on January 1 of the current year; the sample data still ends on 2026-09-23.

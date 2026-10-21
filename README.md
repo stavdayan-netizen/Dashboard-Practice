@@ -139,7 +139,7 @@ Also demo mode only (the real dashboard keeps its four statuses and current layo
 
 ### AI agent safety rules (documentation only)
 
-The AI Maintenance Agent is not built or connected. Its emergency and safety rules (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) are written in [`agent/EMERGENCY_RULES.md`](agent/EMERGENCY_RULES.md), with twelve test scenarios, the conversation paths, planned tools and functional tests are in [`agent/AGENT_SPEC.md`](agent/AGENT_SPEC.md), and a draft system prompt is in [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md). Nothing there needs an account or a key yet.
+The AI Maintenance Agent is not built or connected. Its emergency and safety rules (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) are written in [`agent/EMERGENCY_RULES.md`](agent/EMERGENCY_RULES.md), with twelve test scenarios, the conversation paths, planned tools and functional tests are in [`agent/AGENT_SPEC.md`](agent/AGENT_SPEC.md), and a draft system prompt is in [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md). The system architecture and data flows for the planned local agent are in [`Architecture.md`](Architecture.md). Nothing there needs an account or a key yet.
 
 The `demo/` folder holds the fictional records behind it. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
 
