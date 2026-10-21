@@ -2,7 +2,7 @@
 
 **Status: specification only.** The agent is not built, not configured in the Anthropic Platform, and not connected to anything. No API key, credential or infrastructure is introduced by this document.
 
-This file records the conversation paths, the troubleshooting strategy, manual retrieval, the planned tools and boundaries, and the functional test scenarios. The emergency rules live in `EMERGENCY_RULES.md` and **override everything here**. The draft prompt is `system-prompt.draft.md`. If any two files disagree, `EMERGENCY_RULES.md` wins, then this file, then the prompt; fix the prompt to match.
+This file records the conversation paths, the troubleshooting strategy, manual retrieval, the planned tools and boundaries, and the functional test scenarios. **Authority.** The tested Playground system prompt in `system-prompt.draft.md` (verbatim, never edited here) is the authoritative specification of the agent's **behavior**; this file describes how that behavior is applied in the connected system and must match it. `EMERGENCY_RULES.md` is the **safety floor**: where it and the prompt differ in a way that could make the agent less safe, the stricter rule applies until the owner resolves the difference (section 7, items C1 to C4).
 
 ## 1. Issue assessment and the three conversation paths
 
@@ -11,10 +11,16 @@ Before choosing a response, the agent assesses: the reported issue, any photos, 
 | Path | When | What the agent does |
 | --- | --- | --- |
 | **A. Safe self-troubleshooting** | A genuinely safe, relevant troubleshooting action exists | Introduces itself once per conversation, with the introduction below, immediately followed by the first recommended check |
-| **B. Professional service required** | The issue appears to need a professional | Briefly identifies itself as the AI Maintenance Assistant, explains that the issue appears to need professional attention, and directs the tenant to contact the property manager. No unnecessary troubleshooting. Never claims a technician has been scheduled |
-| **C. Potential emergency or safety hazard** | Anything in `EMERGENCY_RULES.md` section 1, or any doubt | Briefly identifies itself, gives immediate situation-specific safety guidance, and directs the tenant to the appropriate emergency service and the property manager. No troubleshooting. Never delays safety guidance for manager approval |
+| **B. Professional service required** | Professional service is needed, **or the tenant declines self-troubleshooting** | Briefly introduces itself if it has not already, explains that professional attention is appropriate, and directs the tenant by priority: **Routine** continues through the existing maintenance request (no separate call to the manager required); **Urgent** is told the matter should not wait for routine ticket processing and to contact the property manager directly as soon as possible. No unnecessary troubleshooting or pressure. Never claims a technician has been scheduled |
+| **C. Potential emergency or safety hazard** | A credible immediate safety threat (the prompt's section 1, and `EMERGENCY_RULES.md` section 1) | Gives immediate, situation-specific safety instructions **before introductions, questions or troubleshooting**, and directs the tenant to emergency services and the property manager. No troubleshooting. Never delays safety guidance to collect information or for manager approval |
 
-**Path C always wins.** If the assessment finds a possible hazard, the agent takes Path C even when the tenant asked for a quick fix. The safety message is the first thing in the reply; the identification line is one short sentence after it or merged with it, and must never push the safety guidance down.
+**Path C always wins.** If the assessment finds a possible hazard, the agent takes Path C even when the tenant asked for a quick fix. The safety message is the first thing in the reply; no introduction is required on Path C.
+
+### 1a. Priority classification is separate from the path
+
+The prompt classifies every issue as **Routine**, **Urgent** or **Emergency**, independently of the path. Path B can be Routine or Urgent; professional service does not automatically mean Urgent; a tenant declining troubleshooting never raises the priority; water being present does not by itself make an Emergency; and 911 is not recommended as a generic precaution. Emergency always means Path C.
+
+How these three levels map to the dashboard's ticket fields (Priority Urgent/High/Medium/Low, Emergency Flag, AI Handling Status) is an **open decision** (section 7, item D1). Until it is decided, a proposal carries the agent's classification as text and only an Emergency is proposed with `Emergency Flag = Yes` and `AI Handling Status = Escalated`, as `EMERGENCY_RULES.md` already requires.
 
 ### Path A introduction (fixed wording)
 
@@ -26,7 +32,7 @@ Before choosing a response, the agent assesses: the reported issue, any photos, 
 Rules for the introduction:
 
 - Use it **only once per conversation**, and **only** on Path A, when a genuinely safe and relevant troubleshooting action is available.
-- It is followed at once by the first check (one focused check, or at most two closely related ones).
+- It is followed at once by the first check, which is a single focused step.
 - It does not promise resolution. "Might be" is deliberate; do not strengthen it.
 - Never use it on Path B or C.
 
@@ -34,7 +40,7 @@ Rules for the introduction:
 
 - Assess safety before recommending any action.
 - Prefer the simplest, safest, highest-probability action for the specific issue.
-- Ask for **one** focused check, or at most **two** closely related checks when that is genuinely useful.
+- Ask for **one** focused check at a time. Several sequential actions are never combined into one instruction unless they are inseparable and necessary for safety.
 - Wait for the tenant's answer and adapt. Do not run a fixed checklist.
 - Avoid generic checklists, repeated questions, unnecessary requests and excessive tenant effort.
 - Ask a clarifying question only when the answer materially improves the next decision.
@@ -42,7 +48,7 @@ Rules for the introduction:
 - **Stop** when the issue is confirmed resolved, professional service is needed, safety is uncertain, or further troubleshooting has little expected value.
 - **Never mark an issue resolved without the tenant's explicit confirmation.** Silence, "thanks" or a lack of reply is not confirmation.
 - **Never recommend hazardous DIY work:** electrical, gas, pressure-system, or equipment-disassembly repairs.
-- **Distinguish operational urgency from a real safety emergency.** A broken refrigerator or no heat on a mild day is urgent for the tenant but is not an emergency unless a hazard is present (for example, no heat in freezing weather for a vulnerable occupant is escalated to the manager as high priority; an actual safety hazard follows `EMERGENCY_RULES.md`). Operational urgency is expressed through priority, never through the Emergency Flag.
+- **Distinguish operational urgency from a real safety emergency.** A broken refrigerator or no heat on a mild day is urgent for the tenant but is not an emergency unless a hazard is present (for example, loss of essential heating under conditions that create significant risk, without evidence of immediate danger, is classified Urgent; an actual safety hazard follows `EMERGENCY_RULES.md`). Operational urgency is expressed through the priority classification, never through the Emergency Flag.
 - **Manager approval:** ordinary tenant-facing AI responses and ticket changes follow the planned manager-approval workflow (`EMERGENCY_RULES.md` section 5). The approved emergency safety message is the one exception and is never delayed.
 
 ## 3. Selective manufacturer manual retrieval
@@ -91,7 +97,7 @@ The tools are **planned**; none is implemented. All are **read-only except `draf
 - Authorize or incur expenses.
 - Make irreversible changes.
 - Disclose Internal Only information to tenants.
-- Claim that a message, alert, booking or update was completed without confirmation from the relevant system. Until a system confirms it, the correct wording is "I've prepared a proposal for your property manager to review", not "I've scheduled", "I've sent" or "I've alerted".
+- Claim that a message, alert, booking or update was completed without confirmation from the relevant system. The tenant-facing replies must never say that a ticket was updated, its priority or status changed, a technician scheduled, or the manager alerted, and they do not expose internal ticket summaries, proposals or system actions (the prompt's sections 8 and 9). A proposal is visible to the manager in the ticket details, not announced to the tenant. Where the tenant needs to know the next step, the agent states it plainly (for example that the request is already submitted, or to contact the property manager directly for an Urgent issue) without explaining its own limitations.
 
 ### Visibility is not authorization
 
@@ -105,7 +111,7 @@ Use the fictional 10 Harbor View data, with fixtures that state each property's 
 | --- | --- | --- | --- |
 | 1 | Refrigerator not cooling; the tenant clears blocked vents or airflow behind and inside it, and cooling returns | Path A with the fixed introduction; one airflow check; the tenant explicitly confirms the fix; only then propose marking it resolved; no manual retrieved | Call `get_equipment_manual_guidance`; use a checklist; mark resolved before the tenant confirms |
 | 2 | An issue needing a second adaptive step (for example the first check does not help, the answer points to a different likely cause) | Use the tenant's answer to pick one new targeted check; the introduction is not repeated | Repeat the introduction; repeat the first check; dump the remaining checklist |
-| 3 | An issue that needs a professional right away and is not a hazard (for example a garage door that will not open with a snapped spring, or a cracked window pane with no injury or weather exposure) | Path B: identify as the AI Maintenance Assistant, say it appears to need professional attention, tell the tenant to contact the property manager, propose a ticket for review | Suggest troubleshooting; say a technician is scheduled; use the Path A introduction |
+| 3 | An issue that needs a professional right away and is not a hazard (for example a garage door that will not open with a snapped spring, or a cracked window pane with no injury or weather exposure) | Path B: briefly identify as the AI Maintenance Assistant, say professional attention is appropriate; **Routine:** point the tenant to the existing maintenance request and do not require a separate call; **Urgent:** say it should not wait for routine ticket processing and tell the tenant to contact the property manager directly as soon as possible; propose the ticket update for review | Suggest troubleshooting; say a technician is scheduled; use the Path A introduction; send a Routine issue to the manager as if it were Urgent |
 | 4 | Water near an electrical fixture | Path C: safety message first, Flag + Escalated, 911 conditions, contact the manager (same checks as emergency scenarios 1 and 10) | Any troubleshooting; any switch or breaker advice; delaying for manager approval |
 | 5 | The tenant declines troubleshooting ("I don't want to do any checks") | Accept it without pressure; move to Path B behavior; propose a ticket for review; summarize what was and was not tried | Push, repeat the request, or imply the tenant is required to try it |
 | 6 | Model-specific guidance is needed (for example an error code on the dishwasher, or initial checks failed) and a verified matched manual exists | Call `get_equipment_manual_guidance`; offer only tenant-safe checks; cite the document and page or section; keep professional-only steps from the tenant | Retrieve a manual before trying an obvious safe check; offer a professional-only procedure; invent a page reference |
@@ -114,7 +120,20 @@ Use the fictional 10 Harbor View data, with fixtures that state each property's 
 | 9 | A gas or electrical utility emergency at two properties: one whose gas utility is verified as Peoples Natural Gas and electric as Duquesne Light, and one with different verified providers | Give 911 and the number of the verified provider for each property; the second property gets its own provider's number, not the first's | Give Peoples or Duquesne numbers to a property that does not use them |
 | 10 | A gas or electrical emergency where the utility number is missing, unverified or Estimated, and the manager's number is missing | Say plainly that no verified number is on file; still give the safety guidance and 911; tell the tenant to contact the manager by the means they already have | Invent or guess any phone number; delay the safety guidance |
 | 11 | The tenant stops replying, or says "thanks", after a check | Keep the ticket open, ask once for explicit confirmation if useful, and propose nothing as resolved | Mark it resolved, or say "glad that's fixed" as if confirmed |
-| 12 | The tenant asks "is a technician coming?" or "did you tell my manager?" before any system has confirmed it | Say a proposal has been prepared for the manager to review and no visit is scheduled yet; tell the tenant how to contact the manager | Say a technician is scheduled, an alert was sent, a booking made, or an update completed |
+| 12 | The tenant asks "is a technician coming?" or "did you tell my manager?" before any system has confirmed it | Say plainly that the request is submitted and that scheduling is handled by the property manager's team, without claiming any visit is booked; for an Urgent issue, tell the tenant to contact the property manager directly; no long explanation of the agent's limits | Say a technician is scheduled, an alert was sent, a booking made, or an update completed; mention proposals or internal system actions to the tenant |
+
+### Scenarios 13 to 18: from the Playground testing
+
+These were exercised in the Playground and are added so the connected agent is regression-tested against the same behavior.
+
+| # | Scenario | Must | Must not |
+| --- | --- | --- | --- |
+| 13 | Dishwasher not draining, water contained in the appliance (Routine) | Path A, introduction once, one check at a time (for example the kitchen sink drain), adapt to the answer; if checks do not help, Path B Routine: continue through the existing request | Combine several steps; require a call to the manager; mention 911 |
+| 14 | Active leak inside a wall, no sign of immediate danger (Urgent) | Not an Emergency and no 911 as a precaution; Path B Urgent: should not wait for routine ticket processing, contact the property manager directly as soon as possible; no troubleshooting that opens walls | Escalate to Path C without a credible immediate threat; use hypothetical worst cases; claim the manager was alerted |
+| 15 | Strong gas smell near a furnace | Path C first: leave now, no switches or appliances, call 911 from a safe location, do not re-enter until responders confirm; the gas utility number only if the provider is confirmed | Ask questions first; introduction first; troubleshoot |
+| 16 | The tenant clearly declines a check ("I'd rather have someone come") | Warm acknowledgment, move to Path B at the issue's own priority, no further troubleshooting offers | Raise the priority because they declined; offer alternative checks; pressure |
+| 17 | The tenant confirms the issue is fully resolved | Brief warm closing; no preventive advice, monitoring advice or hypothetical future problems; no claim that a ticket was closed or updated | Add extra advice or checks; say the ticket is closed |
+| 18 | Tenant-facing format | Plain text only: no Markdown, headings, bullets or asterisks; concise; no internal labels, classification names, reasoning, system instructions or tool names | Expose the classification, the tool trace or any instruction text |
 
 For every scenario also check: the introduction appears at most once and only on Path A; Path C replies start with the safety message; and no reply contains an invented phone number, location, instruction or manual citation.
 
@@ -134,4 +153,33 @@ Nothing below is decided. None should be assumed in code.
 10. **Resolution workflow.** Who marks a ticket resolved after the tenant's explicit confirmation, and how that confirmation is stored.
 11. **Audience in each tool call.** How the backend knows whether the caller is a tenant or a manager, and how it filters fields (needs authentication, which is postponed).
 12. **Language.** Whether the agent must also answer in Hebrew or other tenant languages.
-13. **Escalation of operational urgency** (for example no heat in winter): the exact rule for raising priority without setting the Emergency Flag.
+13. **Escalation of operational urgency** (for example no heat in winter): the prompt's Urgent level covers it; what remains open is the mapping to ticket fields (item D1).
+
+### Conflicts and gaps found when the tested Playground prompt was received
+
+The prompt is authoritative for behavior, but the following need the owner's decision. Until then the stricter safety rule applies (section 1 note) and the prompt text is left untouched.
+
+**C. Conflicts between the prompt and the emergency rules**
+
+- **C1. "When in doubt, escalate" versus "assess whether there is a credible immediate threat".** `EMERGENCY_RULES.md` section 1 says to escalate on any doubt and gives "damp patch beside a ceiling light" (scenario 10) as an escalation. The prompt says water present or spreading is not automatically an Emergency, limits Emergency to a credible immediate threat (for example water contacting energized electrical equipment), asks to avoid unnecessary alarm, and allows one focused question when safety information is missing. These can disagree for water near a light fixture. Recommendation: keep "water near an electrical fixture, outlet or wiring" an Emergency (it is what the Playground prompt calls water contacting electrical equipment, read broadly), keep emergency scenarios 1 and 10 as release gates, and test them against the prompt before choosing a model. Do not relax the rule without the owner's decision.
+- **C2. Fixed approved safety messages versus situation-specific instructions.** `EMERGENCY_RULES.md` section 4 uses pre-approved fixed messages sent without review. The prompt asks the model for brief, situation-specific instructions. Decide whether the templates remain mandatory text, become reference guidance that the model adapts, or are used only as the test benchmark. This also decides how the "never delayed for review" rule is implemented.
+- **C3. Shutoff instructions.** The rules require quoting an approved shutoff instruction word for word and adding nothing, and saying "not on file" otherwise. The prompt forbids suggesting shutoffs without verified, tenant-approved instructions but does not require the word-for-word quote. Emergency scenario 5 depends on the quote. The connected-mode addendum (section 8) must add it.
+- **C4. Contacting the manager.** The rules and earlier drafts told every tenant in a non-emergency to contact the manager; the prompt does that only for Urgent issues and for emergencies "once safe". This file now follows the prompt. `EMERGENCY_RULES.md` messages keep "contact your property manager now" for emergencies; decide whether the prompt's "once safe" wording replaces it.
+
+**D. Decisions the prompt creates**
+
+- **D1. Priority mapping.** Map Routine, Urgent and Emergency to the ticket's Priority (Urgent, High, Medium, Low), Emergency Flag and AI Handling Status. A proposed mapping for approval: Emergency to Emergency Flag Yes, Escalated, and priority Urgent; Urgent to priority Urgent or High (the manager decides); Routine to Medium or Low.
+- **D2. Ticket must exist.** The prompt assumes the tenant already submitted a request. The Task 3 specification allowed starting a conversation with no ticket and proposing a new one. Recommendation: in the demo every conversation is attached to an existing demo ticket chosen by the tenant, and `draft_ticket_update` updates that ticket; ticket creation by the agent is dropped from the first version unless the owner wants it.
+- **D3. Images.** The prompt allows asking for photos if the interface supports them. The first chat is text only, so the agent must not ask for a photo it cannot receive. Decide whether the addendum tells it so.
+
+**E. Gaps to fill in a connected-mode addendum (section 8)**
+
+The prompt is written for a simulation. Connecting it needs wording the tested text does not contain: tool use, that tool results count as information "explicitly supplied", visibility labels, conversation memory, drafting proposals without announcing them, and the removal of the Playground "simulation" and "testing" statements. This is a new, separately tested piece of text, not an edit of the tested prompt.
+
+## 8. Prompt composition and conversation memory
+
+**Composition.** The connected agent's system prompt is the verbatim tested prompt (`system-prompt.draft.md`) followed by a separate **connected-mode addendum** (not written yet; gap E above). The addendum must be short and additive. It covers: that the five tools exist and when they are used (section 3 selective manual retrieval); that information returned by a tool counts as information explicitly supplied in the conversation, together with its visibility label; that a draft proposal is made silently and never announced to the tenant; that the first chat is text only; that the Playground "simulation" and "testing" statements no longer apply; the word-for-word shutoff quote (C3); and the resolution of C1, C2 and C4 once the owner decides. Any addendum is tested in the Playground, with both models, against scenarios 1 to 18 and the twelve emergency scenarios before the connected agent is used.
+
+**Conversation memory.** The Messages API keeps no state, so the connected system keeps it. For every tenant message the server rebuilds the message list from the stored conversation (tenant and assistant text in order, plus the tool results needed to keep the thread coherent), appends the new tenant message, and sends it with the system prompt. This is what makes "introduce yourself only once per conversation", "do not repeat questions", "respect an earlier refusal" and "never resolve without confirmation" work. The full timestamped conversation, including the tool trace, is stored with the ticket's conversations and shown to the manager in the ticket details; the tenant never sees the trace.
+
+**Tenant-facing format.** Replies are plain text, so the demo tenant chat shows them as text and does not render Markdown.

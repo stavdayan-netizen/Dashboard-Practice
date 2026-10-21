@@ -114,4 +114,15 @@ Use the fictional 10 Harbor View data. **Every scenario here must pass, and a si
 - How the manager is alerted at once (for example a notification) is undecided and must not use Make. Automatic emergency notifications are out of scope for the initial implementation (section 4a); until they exist, the tenant's own call to the manager and the top of the review queue are the only channels.
 - The two utility numbers in section 4a (Peoples Natural Gas, Duquesne Light) came from the project owner and must be confirmed before release.
 - The demo fictional utilities (Susquehanna Gas & Heat, Conestoga Power Co., all `555-01xx` numbers) do not match the real utilities in section 4a. The test fixtures must say which provider each test property uses.
-- The 12 scenarios above stay mandatory release gates and are separate from the 12 functional scenarios in `agent/AGENT_SPEC.md`.
+- The 12 scenarios above stay mandatory release gates and are separate from the functional scenarios in `agent/AGENT_SPEC.md`.
+
+## 9. Reconciliation with the tested Playground prompt
+
+The tested system prompt (`system-prompt.draft.md`) is the authority for the agent's behavior. These rules are the safety floor and are **not weakened** by it. Four differences need the owner's decision; until then the stricter rule here applies. Details and recommendations: `agent/AGENT_SPEC.md` section 7.
+
+- **C1.** Section 1 says "when in doubt, escalate" and treats a damp patch beside a ceiling light (scenario 10) as an emergency. The prompt limits Emergency to a credible immediate threat and says water alone is not automatically one.
+- **C2.** Section 4 uses fixed, pre-approved messages; the prompt asks for brief, situation-specific instructions.
+- **C3.** Section 3 requires quoting an approved shutoff instruction word for word; the prompt only forbids unapproved shutoff advice.
+- **C4.** The prompt tells the tenant to contact the property manager "once safe" in an emergency, and only for Urgent issues otherwise; section 4 drafts say "now".
+
+Also aligned with the prompt and consistent with this file: no claim that emergency services or the manager were notified; Peoples Natural Gas and Duquesne Light only when explicitly confirmed; no invented contacts; no troubleshooting or hazardous DIY in an emergency; no diagnostic questions before the safety instructions.

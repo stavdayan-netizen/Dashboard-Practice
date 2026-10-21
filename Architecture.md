@@ -84,6 +84,7 @@ sequenceDiagram
   S->>F: append tenant message with timestamp
   S-->>Tn: run_id (the run continues in the background)
   S->>A: start run
+  A->>F: load the stored conversation (memory)
   loop until the model gives a final answer or a limit is hit
     A->>M: messages + system prompt + tool definitions
     M-->>A: text and/or tool_use
@@ -196,7 +197,9 @@ Input and output schemas are in `SPEC.MD`.
 
 - API: Anthropic Messages API with tool use, called from `serve.ps1` with `Invoke-RestMethod`.
 - Model: configurable in `.env`; the starting model is Claude Haiku 5.5 with switching to Claude Sonnet 5.5. The exact model identifiers and their availability on the account are to be confirmed against the API when the key is configured. No final production model is chosen.
-- The system prompt is stored in the repo (no secrets in it) and replaces the outdated draft once the tested Playground prompt is provided.
+- The system prompt is the verbatim tested Playground prompt stored in the repo (`agent/system-prompt.draft.md`, no secrets in it), plus a separate connected-mode addendum that is not written yet. The addendum is tested before use (`agent/AGENT_SPEC.md` section 8).
+- **Conversation memory:** the API is stateless, so on each tenant message the server rebuilds the message list from the stored conversation in `agent-data/` before calling the model; this is what keeps the one-time introduction, earlier refusals and unconfirmed resolution consistent.
+- Tenant replies are plain text (no Markdown) and the first chat is text only.
 
 ## 9. What stays out of scope
 
