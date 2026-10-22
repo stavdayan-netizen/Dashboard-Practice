@@ -52,7 +52,8 @@ Assert (($req.system[0].text -ceq (Get-SystemPrompt).text) -and ($req.system[0].
 Assert ((@($req.tools).Count -eq 5) -and ((@($req.tools | ForEach-Object { $_.name }) -join ',') -ceq ($script:ToolNames -join ','))) 'all five tools are declared'
 Assert (@($req.tools | Where-Object { $null -ne $_.PSObject.Properties['strict'] }).Count -eq 0) 'no strict flag (our own validation applies)'
 Assert (($req.messages[0].role -ceq 'user') -and ($req.messages[@($req.messages).Count - 1].role -ceq 'user')) 'conversation starts and ends with a user turn (no prefill)'
-foreach ($bad in 'temperature', 'top_p', 'top_k', 'tool_choice', 'thinking', 'output_config') { Assert ($null -eq $req.PSObject.Properties[$bad]) "request has no $bad by default" }
+foreach ($bad in 'temperature', 'top_p', 'top_k', 'tool_choice', 'thinking') { Assert ($null -eq $req.PSObject.Properties[$bad]) "request has no $bad by default" }
+Assert (($req.output_config.effort -ceq 'medium') -and (@($req.output_config.PSObject.Properties).Count -eq 1)) 'effort is sent explicitly as medium by default (also for the Sonnet comparison)'
 Assert ((@(Msgs $c1).Count -eq 2) -and ((LastMsg $c1).source -ceq 'model')) 'tenant and assistant messages are stored (source model)'
 $tv = Get-ConversationView -ConversationId $c1 -Audience 'tenant'
 Assert (((Keys $tv.data.messages[1]) -join ',') -ceq 'ts,role,text') 'tenant view shows only time, role and text'

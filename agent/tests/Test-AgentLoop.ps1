@@ -96,7 +96,7 @@ $big = Get-AgentSettings -Override @{ AGENT_RUN_SPEND_USD = '999'; AGENT_DAILY_S
 Assert ($big.RunUsd -le 2.0 -and $big.DailyUsd -le 20.0 -and $big.TotalUsd -le 100.0 -and $big.MaxToolRounds -le 12 -and $big.MaxOutputTokens -le 8192 -and $big.MaxRunSeconds -le 300) 'a typo cannot raise limits above the hard ceilings'
 $low = Get-AgentSettings -Override @{ AGENT_RUN_SPEND_USD = 'abc'; AGENT_MAX_TOOL_ROUNDS = '-3' }
 Assert ($low.RunUsd -eq 0.25 -and $low.MaxToolRounds -eq 1) 'bad numbers fall back to defaults or the minimum'
-Assert ((Get-AgentSettings -Override @{ AGENT_EFFORT = 'ultra' }).Effort -ceq '') 'an unknown effort level is dropped'
+Assert (((Get-AgentSettings -Override @{ AGENT_EFFORT = 'ultra' }).Effort -ceq 'medium') -and ((Get-AgentSettings -Override @{}).Effort -ceq 'medium') -and ((Get-AgentSettings -Override @{ AGENT_EFFORT = 'low' }).Effort -ceq 'low')) 'effort defaults to medium, an unknown level falls back to medium, low is accepted'
 $pub = Get-PublicSettings (Get-AgentSettings -Override (S @{}))
 Assert (((Keys $pub) -notcontains 'ApiKey') -and $pub.KeyPresent -eq $true) 'public settings never include the key'
 Assert (-not ((ConvertTo-Json $pub -Depth 4) -like "*$KEY*")) 'public settings JSON does not contain the key'

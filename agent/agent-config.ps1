@@ -65,7 +65,8 @@ function Get-AgentSettings {
     $c = $script:Ceilings
     $modelId = Resolve-ModelId $src['AGENT_MODEL']
     $effort = [string]$src['AGENT_EFFORT']
-    if ($effort -and (@('low', 'medium', 'high', 'xhigh', 'max') -cnotcontains $effort)) { $effort = '' }
+    if (-not $effort) { $effort = 'medium' }
+    if (@('low', 'medium', 'high', 'xhigh', 'max') -cnotcontains $effort) { $effort = 'medium' }
     return [ordered]@{
         ApiKey = [string]$src['ANTHROPIC_API_KEY']
         LiveEnabled = ([string]$src['AGENT_LIVE_ENABLED'] -ceq '1')

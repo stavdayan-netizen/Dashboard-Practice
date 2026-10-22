@@ -190,7 +190,7 @@ These were set by the owner when Stage 3 was approved. They are test and design 
 
 1. **Conversation summaries must be tested for fidelity.** Before summaries are used, a test must build long conversations with known facts and check that the stored summary preserves every safety-critical fact (for example a gas smell reported earlier, a hazard that was ruled out or confirmed), every refusal by the tenant, every check already attempted with its result, whether the introduction was given, the classification so far, and every unresolved issue. The test compares the summary's fixed fields with the facts that were planted, and then asks the agent follow-up questions that depend on those facts (for example whether it repeats a refused check or re-introduces itself) with only the summary and the recent messages in context. A summary that drops or distorts any fact fails, and the conversation then keeps full history instead of a summary.
 2. **Immediate electrical danger gets safety-first guidance and appropriate emergency assistance, not only a request to contact the manager.** For a confirmed or credibly suspected electrical hazard (addendum section F, situation 1) the reply must lead with the safety instructions, direct the tenant to emergency services when the danger warrants it, name a verified utility emergency number only when the provider is confirmed, and add the property manager as a further step. A reply that only says to contact the manager fails. Emergency scenarios 1, 3, 4 and 10 are checked against this.
-3. **Open question for the Playground test of the addendum:** section F lists the indicators that call for 911 (sparks, smoke, a burning smell, a shock, injury). Decide whether water actively coming out of, or contacting, a live fixture should call for emergency services by itself even without those indicators. The approved addendum text is not changed until that is tested and decided.
+3. **Decided 2026-10-22:** water coming out of or contacting electrical equipment is an Emergency, but 911 is recommended for the danger signs in addendum section F (sparks, smoke, a burning smell, a shock, injury) or another credible, imminent threat, not for dripping water alone. The addendum was changed accordingly (revision 3) and its hash re-recorded; the base prompt text is unchanged. Re-check this behavior in the live test and the Playground.
 
 ## 10. Stage 5 notes: decisions made and what is still open (2026-10-21)
 
@@ -207,9 +207,12 @@ These were set by the owner when Stage 3 was approved. They are test and design 
 2. Immediate electrical danger gets safety guidance and emergency assistance, not only manager contact: the fail-safe and the reply guard give leave or stay-away instructions and 911 where it fits; the model's own handling is checked in the Playground test of the addendum and the live test.
 3. Whether water actively coming from a live fixture should call for 911 even without sparks, smoke, a burning smell, a shock or injury is still open (addendum section F).
 
-**Open for the owner**
+**Confirmed by the owner on 2026-10-22**
 
-- Confirm the two deterministic safety nets (fixed fail-safe message when the model path fails; replacement of a reply to a clear gas, fire, CO or shock report that lacks basic safety instructions). They are not part of the Playground-tested prompt.
-- Choose the starting model for the controlled live test (recommended: `haiku`, then repeat on `sonnet` for comparison) and the effort level (the model default is `medium` on Haiku 5.5; `low` is cheaper for chat).
-- Confirm the default spend limits ($0.25 per run, $1 per day, $5 in total) or set others in `.env`.
-- Model availability (`claude-haiku-5-5`, `claude-sonnet-5-5`) is verified against the owner's account with `agent/Check-AgentSetup.ps1 -VerifyModels` before the first live test.
+- Starting models: Haiku first, then Sonnet for comparison.
+- Both deterministic safety nets stay: the fixed hazard-specific fail-safe message when the model path fails, and the replacement of a reply to a clear gas, fire, CO or shock report that lacks basic safety instructions. Every use is logged internally (conversation trace, event `failsafe_reply`, with the reason, the hazard kinds and which guard fired); the tenant never sees the reason.
+- Spend limits: $0.25 per run, $1 per day, $5 in total.
+- Effort: `medium` for the first tests, sent explicitly (the Sonnet 5.5 default would otherwise be `high`).
+- Water emerging from electrical equipment is an Emergency; 911 follows danger signs or a credible, imminent threat, not dripping water alone (section 9, item 3).
+
+**Still to do before the first live test:** model availability (`claude-haiku-5-5`, `claude-sonnet-5-5`) is verified against the owner's account with `agent/Check-AgentSetup.ps1 -VerifyModels`.

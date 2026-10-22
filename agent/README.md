@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentRoutes
 
 Turn on live calls (your own machine, your own key):
 
-1. Open `.env` in the project folder in a text editor and add `ANTHROPIC_API_KEY=` followed by your key, `AGENT_LIVE_ENABLED=1` and `AGENT_MODEL=haiku`. Do not paste the key anywhere else.
+1. Open `.env` in the project folder in a text editor and add `ANTHROPIC_API_KEY=` followed by your key, `AGENT_LIVE_ENABLED=1` and `AGENT_MODEL=haiku` (effort defaults to `medium`). Do not paste the key anywhere else.
 2. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Check-AgentSetup.ps1 -VerifyModels`
 3. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Run-LiveTest.ps1 -Scenario dishwasher` (shows the plan), then add `-Confirm` to run it.
 

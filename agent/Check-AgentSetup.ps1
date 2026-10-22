@@ -32,7 +32,7 @@ if (-not $S.LiveEnabled) { $problems += 'AGENT_LIVE_ENABLED is not 1' }
 if ($env:AGENT_MOCK_RESPONSES_FILE) { Line 'AGENT_MOCK_RESPONSES_FILE' 'SET: model replies are scripted and no live call will be made'; $problems += 'AGENT_MOCK_RESPONSES_FILE is set in this environment (test mode)' }
 Line 'Model' $(if ($S.ModelId) { "$($S.ModelName) -> $($S.ModelId)" } else { "'$($S.ModelName)' is not a supported model (use haiku or sonnet)" })
 if (-not $S.ModelId) { $problems += 'AGENT_MODEL is not haiku or sonnet' }
-Line 'Effort' $(if ($S.Effort) { $S.Effort } else { '(model default)' })
+Line 'Effort' $S.Effort
 Line 'Tool rounds / output tokens' "$($S.MaxToolRounds) / $($S.MaxOutputTokens)"
 Line 'Input token cap per call' $S.MaxInputTokens
 Line 'Run time limit / call timeout' "$($S.MaxRunSeconds) s / $($S.CallTimeoutSeconds) s"
