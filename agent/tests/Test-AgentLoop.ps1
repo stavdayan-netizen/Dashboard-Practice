@@ -20,6 +20,7 @@ $envdir = Join-Path $tmp 'env'
 Initialize-AgentLib -ProjectRoot $root -StoreDir $store -EnvDir $envdir
 $KEY = 'sk-ant-fake-NOTAREALKEYNOTAREALKEY1234567890'
 $demoBefore = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
+$realConvBefore = @(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ','
 
 function S([hashtable]$More) {
     $o = @{ ANTHROPIC_API_KEY = $KEY; AGENT_LIVE_ENABLED = '1'; AGENT_MODEL = 'haiku'; AGENT_RETRY_DELAY_MS = '0' }
@@ -63,7 +64,8 @@ Assert ($p.text.Contains('### Path C - Emergency')) 'base prompt text is present
 Assert ($p.text.Contains('Appropriate conversation closure.')) 'base prompt is complete (last bullet present)'
 Assert ($p.text.Contains('## Connected mode')) 'addendum is included'
 Assert ($p.text.IndexOf('### Path C - Emergency') -lt $p.text.IndexOf('## Connected mode')) 'addendum comes after the base prompt'
-Assert ($p.text.EndsWith('notes about proposals to it.')) 'addendum is complete'
+Assert ($p.text.Contains('### H. Precautions before a physical step') -and $p.text.Contains('look it up first (section A)') -and $p.text.IndexOf('### G. Output') -lt $p.text.IndexOf('### H.')) 'the addendum includes the precautions-before-physical-steps rule'
+Assert ($p.text.EndsWith('or move to professional service.')) 'addendum is complete (ends with the last rule)'
 Assert ($p.text.Contains("`n`n## Connected mode")) 'base and addendum are separated by a blank line'
 $h = Read-JsonFile (Join-Path $root 'agent\prompt-hashes.json')
 Assert (($p.base_sha256 -ceq $h.base_sha256) -and ($p.addendum_sha256 -ceq $h.addendum_sha256)) 'prompt hashes match the recorded ones'
@@ -108,7 +110,7 @@ foreach ($part in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'loop-par
 Section 'final checks'
 $demoAfter = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
 Assert ($demoBefore -ceq $demoAfter) 'demo/ files are byte-identical after all tests'
-Assert (-not (Test-Path (Join-Path $root 'agent-data\conversations\conv-*'))) 'the real agent-data/ received no test data'
+Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
 Assert ((& git -C $root status --porcelain -- app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null | Measure-Object).Count -eq 0) 'dashboard and tenant portal files are unchanged in git (demo/ is covered by the byte-hash check)'
 if ([System.IO.Directory]::Exists($tmp)) { [System.IO.Directory]::Delete($tmp, $true) }
 Write-Host ''

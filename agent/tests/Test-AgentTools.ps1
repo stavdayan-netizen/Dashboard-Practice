@@ -40,6 +40,7 @@ $demoCopy = Join-Path $tmp 'demo'
 [void][System.IO.Directory]::CreateDirectory($tmp)
 $realDemo = Join-Path $root 'demo'
 $before = Dir-Hash $realDemo
+$realConvBefore = @(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ','
 $tsRx = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$'
 
 Initialize-AgentLib -ProjectRoot $root -StoreDir $store
@@ -336,7 +337,7 @@ Assert (@(Get-ChildItem -LiteralPath $store -Recurse -File -Filter '*.tmp').Coun
 
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
-Assert (-not (Test-Path (Join-Path $root 'agent-data\conversations\conv-*'))) 'the real agent-data/ received no test data'
+Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
 $gitChanged = & git -C $root status --porcelain -- app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null
 Assert (-not $gitChanged) 'dashboard and tenant portal files have no git changes (demo/ is covered by the byte-hash check)'
 

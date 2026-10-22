@@ -20,6 +20,7 @@ $KEY = 'sk-ant-fake-NOTAREALKEYNOTAREALKEY1234567890'
 [System.IO.File]::WriteAllText((Join-Path $envdir '.env'), "ANTHROPIC_API_KEY=$KEY`nAGENT_LIVE_ENABLED=1`nAGENT_MODEL=haiku`nAGENT_RETRY_DELAY_MS=0`nAPIFY_TOKEN=not-an-agent-setting`n")
 Initialize-AgentLib -ProjectRoot $root -StoreDir $store -EnvDir $envdir
 $demoBefore = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
+$realConvBefore = @(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ','
 $mockFile = Join-Path $tmp 'mock.json'
 $env:AGENT_MOCK_RESPONSES_FILE = $mockFile
 
@@ -209,7 +210,7 @@ finally {
 Section 'final checks'
 $demoAfter = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
 Assert ($demoBefore -ceq $demoAfter) 'demo/ files are byte-identical after all tests'
-Assert (-not (Test-Path (Join-Path $root 'agent-data\conversations\conv-*'))) 'the real agent-data/ received no test data'
+Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
 Assert ((& git -C $root status --porcelain -- app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null | Measure-Object).Count -eq 0) 'dashboard and tenant portal files are unchanged in git (demo/ is covered by the byte-hash check)'
 Start-Sleep -Milliseconds 500
 if ([System.IO.Directory]::Exists($tmp)) { try { [System.IO.Directory]::Delete($tmp, $true) } catch { } }

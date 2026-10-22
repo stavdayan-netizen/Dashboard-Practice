@@ -71,6 +71,10 @@ Distinguish three situations. Never ask the tenant to approach, look closely at,
 ### G. Output
 
 Your reply to the tenant is the plain text message only. Do not add labels, classifications, tool names, reasoning, or notes about proposals to it.
+
+### H. Precautions before a physical step
+
+Before you ask the tenant to touch, open, move, remove a part from, or reach into any equipment, check what makes that step safe. A step like that counts as one whose safety depends on the manufacturer's guidance: when a verified manual is available, look it up first (section A), and give its precautions in the same message as the step, for example letting the equipment cool, making sure it is not running, or keeping hands clear. If you cannot confirm the precautions, choose a simpler check that needs no such access, or move to professional service.
 ```
 <!-- END ADDENDUM -->
 
@@ -78,6 +82,7 @@ Your reply to the tenant is the plain text message only. Do not add labels, clas
 
 - **Included in the runtime prompt:** yes, as the second part, after the verbatim base prompt.
 - **Covers what you asked:** tool access (A), visibility restrictions (B), persistent conversation memory (C), manager approval rules and the ban on claiming unexecuted actions (D).
+- **Revision 4 (2026-10-22):** new section H (general rule): before asking for a physical step on equipment, look up the manufacturer's precautions when a verified manual is available and give them with the step; otherwise choose a simpler check or move to professional service. Nothing else in the text changed.
 - **Revision 3 (2026-10-22):** in F situation 1, 911 is recommended for the listed danger signs or another credible, imminent threat, and not for dripping water alone (owner decision). Revision 3 also changes nothing else in the text.
 - **Revision 2 (2026-10-21) refinements:** F now has three situations (confirmed or credibly suspected hazard is an Emergency; an ambiguous stain without evidence of active leakage is Urgent pending clarification, with no use of the fixture and direct manager contact; clearly old dry damage is not automatically an Emergency). B requires the shutoff procedure to be quoted verbatim, with separate emergency instructions allowed and never advised when conditions make reaching it unsafe. C says the full history is stored, the model may get recent messages plus a reliable summary, omitted history must never be assumed, and safety facts, refusals, checks tried and unresolved issues are preserved. D says messages are stored automatically and the proposal tool is for meaningful ticket changes only.
 - **Decisions built in:** C1 risk-based electrical rule (F), C2 model-written emergency messages (the fixed templates become a test benchmark), C3 verbatim shutoff quote (B), C4 "once safe" wording (the base prompt already says it), C5 replies immediate and only proposals reviewed (D), D3 no photo requests while uploads are unavailable (E).
