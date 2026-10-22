@@ -279,6 +279,12 @@ function Build-ModelMessages {
         if ($list.Count -gt 0 -and $list[0].role -ceq 'user') { $list[0].content = $contextText + "`n`nLatest messages follow.`n`n" + $list[0].content }
         else { $list = @([ordered]@{ role = 'user'; content = $contextText }) + $list }
     }
+    # server-built scope context (ticket and equipment ids), added to the model input only and never stored in the transcript
+    $scopeText = Get-ConversationContextBlock $Conv
+    if ($scopeText) {
+        if ($list.Count -gt 0 -and $list[0].role -ceq 'user') { $list[0].content = $scopeText + "`n`n" + $list[0].content }
+        else { $list = @([ordered]@{ role = 'user'; content = $scopeText }) + $list }
+    }
     # merge consecutive same-role messages (the API wants alternating turns)
     $merged = @()
     foreach ($m in $list) {

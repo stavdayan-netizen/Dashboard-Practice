@@ -173,6 +173,29 @@ function Get-AllowedEquipmentIds($Conv) {
     return @($ids | Where-Object { $_ } | Select-Object -Unique)
 }
 
+function Get-ConversationContextBlock($Conv) {
+    # Server-built, model-only text naming the ticket and the equipment this conversation may use with the tools.
+    # Everything is re-checked here against the demo data (nothing is trusted from the stored record or the client):
+    # the ticket must exist at this property, and each item must exist and be tenant visible. Names only, no internal fields.
+    if (-not (Test-Initialized)) { return $null }
+    $tid = [string](Get-Prop $Conv 'ticket_id' '')
+    if (-not (Test-IdFormat $tid $script:RxTicket) -or -not $script:Demo.Tickets.ContainsKey($tid)) { return $null }
+    if ($script:Demo.Tickets[$tid].property -cne $script:Demo.PropertyName) { return $null }
+    $items = @()
+    foreach ($eid in (Get-AllowedEquipmentIds $Conv)) {
+        if (-not (Test-IdFormat $eid $script:RxEquip) -or -not $script:Demo.Equipment.ContainsKey($eid)) { continue }
+        $rec = $script:Demo.Equipment[$eid]
+        if (-not (Test-EquipmentTenantVisible $rec)) { continue }
+        $type = [string](Get-Prop $rec 'type' '')
+        $items += $(if ($type -match '^[A-Za-z0-9 /&()-]{1,60}$') { "$eid ($type)" } else { $eid })
+    }
+    $lines = @('CONTEXT FROM THE SYSTEM (not written by the tenant). This conversation is about ticket ' + $tid + '.')
+    if ($items.Count -gt 0) { $lines += ('Equipment linked to this conversation: ' + ($items -join ', ') + '.') }
+    else { $lines += 'No equipment is linked yet; read the ticket first to find which equipment it concerns.' }
+    $lines += 'Use these ids when you call your tools. The tenant does not know them, so never ask the tenant for a ticket number or equipment id, and never mention the ids.'
+    return ($lines -join ' ')
+}
+
 function Get-StoreMutex {
     $key = $script:Cfg.StoreDir.ToLowerInvariant()
     if ($script:MutexKey -ceq $key -and $null -ne $script:StoreMutex) { return $script:StoreMutex }

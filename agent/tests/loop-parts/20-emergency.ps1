@@ -10,7 +10,7 @@ Queue @(
 $r = Turn $cg1 'I smell gas in the kitchen.'
 Assert (($r.source -ceq 'model') -and ($r.reply -ceq $SAFE_GAS)) 'gas smell: the model''s safety message is delivered as written'
 $first = @($script:Requests[0].messages)
-Assert (($first.Count -eq 1) -and ($first[0].content -ceq 'I smell gas in the kitchen.')) 'the first model input is the tenant message, nothing asked before it'
+Assert (($first.Count -eq 1) -and ([string]$first[0].content -like 'CONTEXT FROM THE SYSTEM*') -and ([string]$first[0].content).EndsWith("`n`nI smell gas in the kitchen.")) 'the first model input is the system context followed by the tenant message, nothing asked before it'
 $props = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $cg1 })
 Assert (($props.Count -eq 1) -and ($props[0].status -ceq 'pending') -and ($props[0].proposed_fields.emergency_flag -eq $true) -and ($props[0].proposed_fields.ai_handling_status -ceq 'Escalated') -and ($props[0].proposed_fields.ai_urgency -ceq 'Emergency')) 'an Emergency proposal is pending with the flag and Escalated (nothing applied)'
 Assert (($r.reply -notlike '*proposal*') -and ($r.reply -notlike '*draft_ticket*')) 'the reply does not mention proposals or tools'

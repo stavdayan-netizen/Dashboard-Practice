@@ -118,7 +118,7 @@ Queue @((Resp @((T (SumText (Variant @{ safety_facts = @(); tenant_refusals = @(
 $r = Turn $cd 'The dishwasher still holds water.'
 $ag = $script:Requests[2]
 Assert (($r.memory_mode -ceq 'full') -and ($r.source -ceq 'model')) 'when no summary validates, the full history is used (nothing is lost)'
-Assert ((@($ag.messages).Count -ge 20) -and ([string]$ag.messages[0].content -like 'The dishwasher is not draining.*') -and ([string]$ag.messages[0].content -notlike '*SUMMARY*')) 'the full history reaches the model without an unvalidated summary'
+Assert ((@($ag.messages).Count -ge 20) -and ([string]$ag.messages[0].content -like 'CONTEXT FROM THE SYSTEM*The dishwasher is not draining.*') -and ([string]$ag.messages[0].content -notlike '*SUMMARY*')) 'the full history reaches the model without an unvalidated summary'
 Assert ($null -eq (Read-Conversation $cd).summary) 'a rejected summary is not stored as valid'
 
 Reset-Spend
