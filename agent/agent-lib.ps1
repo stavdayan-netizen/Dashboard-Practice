@@ -663,27 +663,117 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
         if (-not $clean.Contains('emergency_flag')) { $clean['emergency_flag'] = $true; $autoAdded += 'emergency_flag' }
         if (-not $clean.Contains('ai_handling_status')) { $clean['ai_handling_status'] = 'Escalated'; $autoAdded += 'ai_handling_status' }
     }
-    $canon = (ConvertTo-Json -InputObject ([ordered]@{ ticket = $tid; fields = $clean }) -Depth 6 -Compress)
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    $hash = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($canon)) | ForEach-Object { $_.ToString('x2') })
-    $sha.Dispose()
     return (Invoke-StoreLock {
-            $pending = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $Conv.id -and $_.status -ceq 'pending' })
-            $dup = $pending | Where-Object { $_.fields_hash -ceq $hash } | Select-Object -First 1
-            if ($dup) { return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $dup.id; status = 'pending'; duplicate = $true })) }
-            if ($pending.Count -ge $script:MaxPendingPerConversation) { return (New-Result $false $tool $Audience $null 'limit_exceeded' 'Too many pending proposals for this conversation.') }
-            $pid2 = New-RandomId 'prop'
+            # Everything below runs under the store lock, so a manager decision cannot interleave with a merge.
+            $all = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $Conv.id -and $_.ticket_id -ceq $tid })
+            $pending = @($all | Where-Object { $_.status -ceq 'pending' } | Sort-Object { $_.created_at })
+            $target = $(if ($pending.Count -gt 0) { $pending[$pending.Count - 1] } else { $null })
+            # what the ticket would already look like: current values, then approved (not yet applied) proposals, then the pending one
+            $base = Get-TicketBaseline $tid
+            foreach ($a in @($all | Where-Object { $_.status -ceq 'approved' } | Sort-Object { $_.created_at })) { foreach ($p in $a.proposed_fields.PSObject.Properties) { $base[$p.Name] = $p.Value } }
+            if ($target) { foreach ($p in $target.proposed_fields.PSObject.Properties) { $base[$p.Name] = $p.Value } }
+            # drop every field that would change nothing
+            # A new Emergency proposal always carries its flag and Escalated explicitly, even if the ticket already shows them,
+            # so the manager sees the full safety picture.
+            $explicitEmergency = ($clean['ai_urgency'] -ceq 'Emergency') -and -not ($target -and $target.proposed_fields.ai_urgency -ceq 'Emergency')
+            $keep = [ordered]@{}
+            foreach ($n in $clean.Keys) {
+                $safetyField = ($n -ceq 'emergency_flag' -or $n -ceq 'ai_handling_status')
+                if (-not ($base.Contains($n) -and (Test-SameProposalField $n $clean[$n] $base[$n])) -or ($explicitEmergency -and $safetyField)) { $keep[$n] = $clean[$n] }
+            }
+            $kept = @($keep.Keys)
+            $autoKept = @($autoAdded | Where-Object { $kept -contains $_ })
+            if ($kept.Count -eq 0 -or ($kept.Count -eq $autoKept.Count)) {
+                if ($target) { return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $target.id; status = 'pending'; duplicate = $true })) }
+                return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $null; status = 'no_change'; duplicate = $false }))
+            }
             $now = Get-Stamp
+            if ($target) {
+                # merge into the one pending proposal of this conversation and ticket; earlier information is kept
+                $old = [ordered]@{}; foreach ($p in $target.proposed_fields.PSObject.Properties) { $old[$p.Name] = $p.Value }
+                $m = Merge-ProposalFields $old $keep
+                $fieldsAuto = @(@($target.auto_added_fields) + $autoKept + @($m.auto) | Where-Object { $_ } | Select-Object -Unique)
+                $confirmedMerged = $(if ($m.fields.Contains('status')) { $(if ($keep.Contains('status')) { $confirmed } else { [bool]$target.tenant_confirmed_resolution }) } else { $false })
+                $earlier = @(@(Get-Prop $target 'earlier_reasons' @()) + @([string]$target.reason) | Where-Object { $_ })
+                $target.proposed_fields = $m.fields; $target.auto_added_fields = @($fieldsAuto); $target.reason = $reason
+                $target | Add-Member -NotePropertyName earlier_reasons -NotePropertyValue @($earlier) -Force
+                $target.tenant_confirmed_resolution = $confirmedMerged
+                $target.fields_hash = (Get-FieldsHash $tid $m.fields)
+                $target.history = @($target.history) + @([ordered]@{ ts = $now; event = 'merged'; by = 'agent'; added_fields = @($kept); notes = $m.note })
+                Write-JsonFile (Get-ProposalPath $target.id) $target
+                return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $target.id; status = 'pending'; duplicate = $false; merged = $true }))
+            }
+            $pid2 = New-RandomId 'prop'
             $prop = [ordered]@{
                 schema = 'proposal.v1'; id = $pid2; conversation_id = $Conv.id; ticket_id = $tid
-                proposed_fields = $clean; auto_added_fields = @($autoAdded); reason = $reason
-                tenant_confirmed_resolution = $confirmed; fields_hash = $hash
+                proposed_fields = $keep; auto_added_fields = @($autoKept); reason = $reason
+                tenant_confirmed_resolution = $confirmed; fields_hash = (Get-FieldsHash $tid $keep)
                 status = 'pending'; created_at = $now; decided_at = $null; applied_at = $null; decision_note = $null
                 history = @([ordered]@{ ts = $now; event = 'created'; by = 'agent' })
             }
             Write-JsonFile (Get-ProposalPath $pid2) $prop
             return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $pid2; status = 'pending'; duplicate = $false }))
         })
+}
+
+function Get-FieldsHash([string]$TicketId, $Fields) {
+    $canon = (ConvertTo-Json -InputObject ([ordered]@{ ticket = $TicketId; fields = $Fields }) -Depth 6 -Compress)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $hash = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($canon)) | ForEach-Object { $_.ToString('x2') })
+    $sha.Dispose()
+    return $hash
+}
+
+function Get-TicketBaseline([string]$TicketId) {
+    # The ticket's current values for the fields an agent may propose. ai_urgency is not stored on the ticket, so it is absent.
+    $row = $script:Demo.Tickets[$TicketId]
+    $x = Get-TicketExtra $TicketId
+    $b = [ordered]@{ category = $row.category; status = $row.status; ai_handling_status = $x.ai_handling_status; emergency_flag = $x.emergency_flag; notes = $x.notes; equipment_ids = @($x.equipment_ids) }
+    $s = Get-Prop $row 'ai_summary' $null
+    if ($s) { $b['summary'] = [string]$s }
+    return $b
+}
+
+function Test-SameProposalField([string]$Name, $A, $B) {
+    if ($Name -ceq 'equipment_ids') { return ((@($A | Sort-Object) -join '|') -ceq (@($B | Sort-Object) -join '|')) }
+    if ($A -is [bool] -or $B -is [bool]) { return ([bool]$A -eq [bool]$B -and $A -is [bool] -and $B -is [bool]) }
+    return ([string]$A -ceq [string]$B)
+}
+
+function Merge-ProposalFields($Old, $New) {
+    # Newer information is added to the earlier pending proposal without losing the earlier details:
+    # urgency never goes down, an emergency flag never goes away, notes are joined, equipment is combined,
+    # and a Resolved request never stays next to an Emergency. Everything else takes the newer value.
+    $sev = @{ Routine = 0; Urgent = 1; Emergency = 2 }
+    $f = [ordered]@{}
+    foreach ($k in $Old.Keys) { $f[$k] = $Old[$k] }
+    $notes = @()
+    foreach ($k in $New.Keys) {
+        $v = $New[$k]
+        switch ($k) {
+            'ai_urgency' { if (-not $f.Contains($k) -or $sev[[string]$v] -ge $sev[[string]$f[$k]]) { $f[$k] = $v } }
+            'emergency_flag' { $f[$k] = ($v -eq $true -or ($f.Contains($k) -and $f[$k] -eq $true)) }
+            'equipment_ids' { $f[$k] = @(@(@($f[$k]) + @($v)) | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 5) }
+            'notes' {
+                $o = $(if ($f.Contains($k)) { [string]$f[$k] } else { '' })
+                $n = [string]$v
+                if (-not $o -or $n.Contains($o)) { $f[$k] = $n }
+                elseif ($o.Contains($n)) { $f[$k] = $o }
+                elseif (($o.Length + 1 + $n.Length) -le 1000) { $f[$k] = $o + ' ' + $n }
+                else { $f[$k] = $n; $notes += 'earlier notes replaced because the combined notes exceeded 1000 characters' }
+            }
+            default { $f[$k] = $v }
+        }
+    }
+    $auto = @()
+    if ($f.Contains('ai_urgency') -and $f['ai_urgency'] -ceq 'Emergency') {
+        if ($f.Contains('status')) { $f.Remove('status'); $notes += 'a pending Resolved request was removed because the merged proposal is an Emergency' }
+        if ($f['emergency_flag'] -ne $true) { $f['emergency_flag'] = $true; $auto += 'emergency_flag' }
+        if ($f['ai_handling_status'] -cne 'Escalated') { $f['ai_handling_status'] = 'Escalated'; $auto += 'ai_handling_status' }
+    }
+    $sorted = [ordered]@{}
+    foreach ($k in ($f.Keys | Sort-Object)) { $sorted[$k] = $f[$k] }
+    return @{ fields = $sorted; auto = @($auto); note = ($notes -join '; ') }
 }
 
 # ---------------------------------------------------------------- tool dispatcher and definitions
@@ -772,7 +862,7 @@ function Get-AgentToolDefinitions {
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{ equipment_id = $idEq; limit = @{ type = 'integer'; minimum = 1; maximum = 20 } }; required = @('equipment_id'); additionalProperties = $false } },
         [ordered]@{ name = 'get_equipment_manual_guidance'; description = 'Read verified manufacturer guidance for an item, only when needed. Returns matched false with a reason when there is no verified matching manual. The guidance_scope field says whether it is series or general guidance.'
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{ equipment_id = $idEq; question = @{ type = 'string'; minLength = 1; maxLength = 300 } }; required = @('equipment_id', 'question'); additionalProperties = $false } },
-        [ordered]@{ name = 'draft_ticket_update'; description = 'Prepare a proposed ticket change for the property manager. It changes nothing until a manager approves it. Use only for meaningful changes.'
+        [ordered]@{ name = 'draft_ticket_update'; description = 'Prepare a proposed ticket change for the property manager. It changes nothing until a manager approves it. Use only for meaningful changes: a change that alters nothing is ignored, and later changes in the same conversation are merged into the one pending proposal, so send only what is new.'
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{
                     ticket_id = $idTk
                     fields = [ordered]@{ type = 'object'; additionalProperties = $false; properties = [ordered]@{

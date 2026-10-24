@@ -260,10 +260,90 @@ $fromJsonDraft = Json '{"fields":{"ai_urgency":"Urgent","notes":"Leak inside wal
 Assert ((Tool 'draft_ticket_update' $fromJsonDraft 'tenant' $cD).ok) 'draft input parsed from JSON works'
 $cCap = New-Conv 'HV-010' $null
 $capOk = 0
-foreach ($i in 1..5) { if ((Tool 'draft_ticket_update' @{ fields = @{ summary = "Change number $i" }; reason = 'cap test' } 'tenant' $cCap).ok) { $capOk++ } }
-Assert ($capOk -eq 5) 'five pending proposals per conversation are allowed'
-Assert ((Tool 'draft_ticket_update' @{ fields = @{ summary = 'Change number 6' }; reason = 'cap test' } 'tenant' $cCap).error.code -ceq 'limit_exceeded') 'the sixth pending proposal is refused'
+foreach ($i in 1..6) { if ((Tool 'draft_ticket_update' @{ fields = @{ summary = "Change number $i" }; reason = 'cap test' } 'tenant' $cCap).ok) { $capOk++ } }
+Assert ($capOk -eq 6) 'repeated drafts are accepted'
+Assert (@(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $cCap -and $_.status -ceq 'pending' }).Count -eq 1) 'repeated drafts in one conversation end up as ONE pending proposal (merged, not piled up)'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are unchanged by drafting'
+
+Section 'proposals: no-op filtering and merging of pending proposals'
+function Pend([string]$C) { return , @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $C -and $_.status -ceq 'pending' }) }
+$cM = New-Conv 'HV-010' 'eq-hv-dishwasher'
+[void](Add-ConversationMessage -ConversationId $cM -Role 'tenant' -Text 'The dishwasher is not draining.')
+$m1 = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Routine'; notes = 'Water stands in the bottom; the sink drains fine.'; summary = 'Dishwasher not draining.' }; reason = 'First report.' } 'tenant' $cM
+$m1id = $m1.data.proposal_id
+Assert ($m1.ok -and $m1.data.status -ceq 'pending' -and -not $m1.data.merged) 'the first draft creates a pending proposal'
+$mNo = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Routine' }; reason = 'Duplicate check placeholder; no further change needed.' } 'tenant' $cM
+Assert ($mNo.ok -and $mNo.data.proposal_id -ceq $m1id -and $mNo.data.duplicate -eq $true -and (Pend $cM).Count -eq 1) 'a draft that changes nothing is not stored (the existing pending proposal is returned)'
+$cN = New-Conv 'HV-010' $null
+$bl = Get-TicketBaseline 'HV-010'
+$noop = Tool 'draft_ticket_update' @{ fields = @{ category = $bl.category; emergency_flag = $bl.emergency_flag }; reason = 'Same as the ticket.' } 'tenant' $cN
+Assert ($noop.ok -and $noop.data.status -ceq 'no_change' -and $null -eq $noop.data.proposal_id -and (Pend $cN).Count -eq 0) 'a draft equal to the current ticket creates no proposal (status no_change)'
+$mix = Tool 'draft_ticket_update' @{ fields = @{ category = $bl.category; notes = 'Tenant is comfortable cleaning the filter.' }; reason = 'One real change.' } 'tenant' $cN
+$mixP = Read-JsonFile (Get-ProposalPath $mix.data.proposal_id)
+Assert ($mix.ok -and (@($mixP.proposed_fields.PSObject.Properties.Name) -join ',') -ceq 'notes') 'fields that match the ticket are dropped, the real change is kept'
+
+$m2 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Tenant cleaned the filter; it was clean.'; ai_handling_status = 'Escalated' }; reason = 'Second report.' } 'tenant' $cM
+Assert ($m2.ok -and $m2.data.merged -eq $true -and $m2.data.proposal_id -ceq $m1id -and (Pend $cM).Count -eq 1) 'a later change is merged into the one pending proposal of the conversation'
+$mp = Read-JsonFile (Get-ProposalPath $m1id)
+Assert ($mp.proposed_fields.summary -ceq 'Dishwasher not draining.' -and $mp.proposed_fields.ai_urgency -ceq 'Routine' -and $mp.proposed_fields.ai_handling_status -ceq 'Escalated') 'earlier fields are kept and new fields are added'
+Assert ($mp.proposed_fields.notes.Contains('sink drains fine') -and $mp.proposed_fields.notes.Contains('it was clean')) 'notes keep the earlier information and add the new'
+Assert ($mp.reason -ceq 'Second report.' -and (@($mp.earlier_reasons) -contains 'First report.')) 'the newest reason is shown and the earlier one is kept'
+Assert ((@($mp.history).Count -eq 2) -and $mp.history[1].event -ceq 'merged' -and $mp.history[1].by -ceq 'agent' -and $mp.status -ceq 'pending') 'the merge is recorded in the history and the proposal stays pending'
+Assert ($mp.fields_hash -ceq (Get-FieldsHash 'HV-010' $mp.proposed_fields)) 'the fields hash is recomputed after a merge'
+$mu = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Urgent' }; reason = 'Worse.' } 'tenant' $cM
+$mu2 = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Routine' }; reason = 'Back to routine?' } 'tenant' $cM
+Assert ((Read-JsonFile (Get-ProposalPath $m1id)).proposed_fields.ai_urgency -ceq 'Urgent') 'merged urgency never goes down'
+$mE = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency'; summary = 'Water near electrical parts.' }; reason = 'Escalation.' } 'tenant' $cM
+$mEp = Read-JsonFile (Get-ProposalPath $m1id)
+Assert ($mEp.proposed_fields.ai_urgency -ceq 'Emergency' -and $mEp.proposed_fields.emergency_flag -eq $true -and $mEp.proposed_fields.ai_handling_status -ceq 'Escalated' -and $mEp.proposed_fields.summary -ceq 'Water near electrical parts.') 'an Emergency merges with flag and Escalated, newest summary wins'
+$mR = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Routine' }; reason = 'x' } 'tenant' $cM
+Assert ((Read-JsonFile (Get-ProposalPath $m1id)).proposed_fields.ai_urgency -ceq 'Emergency') 'an Emergency is never lowered by a later merge'
+
+# Resolved next to Emergency is dropped; a Resolved request merges when there is no emergency
+$cR = New-Conv 'HV-010' $null
+[void](Add-ConversationMessage -ConversationId $cR -Role 'tenant' -Text 'It works now.')
+$r1 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Tenant says it works now.' }; reason = 'r1' } 'tenant' $cR
+$r2 = Tool 'draft_ticket_update' @{ fields = @{ status = 'Resolved' }; reason = 'Tenant confirmed.'; tenant_confirmed_resolution = $true } 'tenant' $cR
+$rp = Read-JsonFile (Get-ProposalPath $r1.data.proposal_id)
+Assert ($r2.data.merged -and $rp.proposed_fields.status -ceq 'Resolved' -and $rp.tenant_confirmed_resolution -eq $true) 'a confirmed Resolved request merges into the pending proposal'
+$r3 = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency' }; reason = 'Smoke now.' } 'tenant' $cR
+$rp = Read-JsonFile (Get-ProposalPath $r1.data.proposal_id)
+Assert (-not (@($rp.proposed_fields.PSObject.Properties.Name) -contains 'status') -and $rp.tenant_confirmed_resolution -eq $false) 'a Resolved request is removed when the merged proposal becomes an Emergency'
+
+# long notes: the newest are kept and the loss is recorded
+$cL = New-Conv 'HV-010' $null
+$l1 = Tool 'draft_ticket_update' @{ fields = @{ notes = ('a' * 700) }; reason = 'l1' } 'tenant' $cL
+$l2 = Tool 'draft_ticket_update' @{ fields = @{ notes = ('b' * 600) }; reason = 'l2' } 'tenant' $cL
+$lp = Read-JsonFile (Get-ProposalPath $l1.data.proposal_id)
+Assert ($lp.proposed_fields.notes.Length -le 1000 -and $lp.proposed_fields.notes.StartsWith('b') -and $lp.history[1].notes -like '*exceeded 1000*') 'notes over the limit keep the newest and record that earlier notes were replaced'
+
+# equipment ids combine; scope is still enforced
+$cE = New-Conv 'HV-010' 'eq-hv-dishwasher'
+$e1 = Tool 'draft_ticket_update' @{ fields = @{ equipment_ids = @('eq-hv-dishwasher') }; reason = 'e1'; } 'tenant' $cE
+$e2 = Tool 'draft_ticket_update' @{ fields = @{ equipment_ids = @('eq-hv-fridge') }; reason = 'e2' } 'tenant' $cE
+Assert ($e2.error.code -ceq 'not_available') 'merging cannot add equipment outside the conversation scope'
+
+# approved and decided proposals are never overwritten
+$cA = New-Conv 'HV-010' $null
+$a1 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Approved note.' }; reason = 'a1' } 'tenant' $cA
+$appr = Set-ProposalState -Audience 'manager' -ProposalId $a1.data.proposal_id -Action 'approve' -Note 'ok'
+$beforeAppr = Get-Content -LiteralPath (Get-ProposalPath $a1.data.proposal_id) -Raw
+$a2 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'A different later note.' }; reason = 'a2' } 'tenant' $cA
+Assert ($a2.ok -and $a2.data.proposal_id -cne $a1.data.proposal_id -and -not $a2.data.merged) 'a new change after an approval becomes a new pending proposal'
+Assert ((Get-Content -LiteralPath (Get-ProposalPath $a1.data.proposal_id) -Raw) -ceq $beforeAppr) 'an approved proposal is byte-identical after later drafts'
+$a3 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Approved note.' }; reason = 'a3' } 'tenant' $cA
+Assert ($a3.data.duplicate -eq $true -or $a3.data.status -ceq 'no_change' -or $a3.data.merged) 'repeating an approved change does not create another proposal for it'
+$rej = Set-ProposalState -Audience 'manager' -ProposalId $a2.data.proposal_id -Action 'reject' -Note 'no'
+$rejBefore = Get-Content -LiteralPath (Get-ProposalPath $a2.data.proposal_id) -Raw
+$a4 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'A different later note.' }; reason = 'a4' } 'tenant' $cA
+Assert ($a4.ok -and $a4.data.proposal_id -cne $a2.data.proposal_id -and (Get-Content -LiteralPath (Get-ProposalPath $a2.data.proposal_id) -Raw) -ceq $rejBefore) 'a rejected proposal is left untouched and a new pending one is created'
+Assert ((Read-JsonFile (Get-ProposalPath $m1id)).status -ceq 'pending') 'merging never changes a proposal status'
+
+# a tenant cannot reach another conversation's proposals; the tickets themselves are never changed
+$otherC = New-Conv 'HV-010' $null
+$o1 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Other conversation note.' }; reason = 'o1' } 'tenant' $otherC
+Assert ($o1.data.proposal_id -cne $m1id -and (Pend $otherC).Count -eq 1) 'proposals are merged only within the same conversation'
+Assert (Same-Hash $before (Dir-Hash $realDemo)) 'demo files are still unchanged'
 
 Section 'manager approval boundaries'
 $pid1 = $d1.data.proposal_id
@@ -284,8 +364,10 @@ $after1 = Read-JsonFile (Get-ProposalPath $pid1)
 Assert ((ConvertTo-Json $before1.proposed_fields -Compress) -ceq (ConvertTo-Json $after1.proposed_fields -Compress)) 'approving does not change the proposed fields'
 $ap2 = Set-ProposalState -Audience 'manager' -ProposalId $pid1 -Action 'applied'
 Assert ($ap2.ok -and $ap2.data.status -ceq 'applied' -and $ap2.data.applied_at -match $tsRx) 'an approved proposal can be marked applied by the manager'
-Assert (@($after1.history).Count -eq 2 -and @((Read-JsonFile (Get-ProposalPath $pid1)).history).Count -eq 3) 'history records each step with a timestamp'
-$rj = Set-ProposalState -Audience 'manager' -ProposalId $em.data.proposal_id -Action 'reject' -Note 'Handled by phone.'
+Assert (@($after1.history).Count -eq (@($before1.history).Count + 1) -and @((Read-JsonFile (Get-ProposalPath $pid1)).history).Count -eq (@($before1.history).Count + 2) -and @(@((Read-JsonFile (Get-ProposalPath $pid1)).history) | Where-Object { $_.ts -match $tsRx }).Count -eq @((Read-JsonFile (Get-ProposalPath $pid1)).history).Count) 'history records each step with a timestamp'
+$cRej = New-Conv 'HV-010' $null
+$rejDraft = Tool 'draft_ticket_update' @{ fields = @{ notes = 'To be rejected.' }; reason = 'reject test' } 'tenant' $cRej
+$rj = Set-ProposalState -Audience 'manager' -ProposalId $rejDraft.data.proposal_id -Action 'reject' -Note 'Handled by phone.'
 Assert ($rj.ok -and $rj.data.status -ceq 'rejected') 'manager can reject'
 Assert ((Set-ProposalState -Audience 'manager' -ProposalId $em.data.proposal_id -Action 'applied').error.code -ceq 'invalid_state') 'a rejected proposal cannot be applied'
 Assert ((Set-ProposalState -Audience 'manager' -ProposalId 'prop-../../x' -Action 'approve').error.code -ceq 'not_found') 'malformed proposal id is not found'
@@ -298,7 +380,7 @@ $tv = Get-ConversationView -ConversationId $cD -Audience 'tenant'
 Assert ($tv.ok -and -not (HasKey $tv.data 'trace') -and -not (HasKey $tv.data 'proposals') -and -not (HasKey $tv.data 'summary')) 'tenant view has no trace, proposals or summary'
 Assert ((@($tv.data.messages | ForEach-Object { (Keys $_) -join ',' }) | Select-Object -Unique) -ceq 'ts,role,text') 'tenant messages show only time, role and text'
 $mv = Get-ConversationView -ConversationId $cD -Audience 'manager'
-Assert ($mv.ok -and @($mv.data.trace).Count -ge 10 -and @($mv.data.proposals).Count -ge 3) 'manager view has the full trace and the proposals'
+Assert ($mv.ok -and @($mv.data.trace).Count -ge 10 -and @($mv.data.proposals).Count -ge 1) 'manager view has the full trace and the proposals'
 Assert (@($mv.data.trace | Where-Object { $_.tool -ceq 'draft_ticket_update' }).Count -ge 5) 'draft calls are traced'
 Assert (@($mv.data.trace | Where-Object { $_.ok -eq $false }).Count -ge 1) 'rejected calls are traced too'
 Assert (@($mv.data.trace | Where-Object { $_.ts -notmatch $tsRx }).Count -eq 0) 'trace entries have ISO timestamps'
