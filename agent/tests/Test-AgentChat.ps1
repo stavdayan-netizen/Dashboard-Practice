@@ -118,11 +118,13 @@ Assert (($pjs -match 'applyView\(p, row, host, \{ text:') -and ($pjs -match 'the
 Assert ($pjs -match 'ui\.count\.textContent = "\?"') 'when the server cannot be reached the pending count is shown as unknown, never as an old number'
 $appX = [System.IO.File]::ReadAllText((Join-Path $root 'app.js'))
 Assert (($appX -match 'function issueLabel\(row\)') -and ($appX -match 'DEMO_MODE && row\.demo && row\.demo\.portal_submitted') -and ($appX -match 'd\.summary_approved && row\.ai_summary') -and ($appX -match 'return row\.issue;')) 'the table label is changed only for portal tickets in demo mode; every other ticket still shows its own issue text'
+Assert (($appX -match 'const ISSUE_LABEL_MAX = 120') -and ($appX -match 'function firstSentence\(text\)') -and ($appX -match 'return firstSentence\(row\.ai_summary\)') -and ($appX -match 'return firstSentence\(d\.issue_summary\)') -and -not ($appX -match 'return clip\(')) 'the table label is the first sentence of the approved AI summary (at most 120 characters plus an ellipsis); the full summary stays in the details dialog'
 Assert (($appX -match 'td\.title = row\.issue') -and ($appX -match 'issueSpan\.title = row\.issue')) 'the tenant''s original text stays available as a tooltip'
 Assert (-not ($appX -match '\brow\.issue\s*=[^=]')) 'nothing in the dashboard assigns to a ticket''s original issue text'
 Assert (($appX -match 'addDialogField\(body, "Original Issue", row\.issue') -and ($appX -match 'row\.issue,\s+row\.category')) 'the details dialog and the search still use the original text'
 Assert (($pjs -match 'patch\.demo\.summary_approved = true') -and ($pjs -match 'also shown as the short issue label in the ticket table')) 'an AI summary becomes the table label only when the manager applies it (and the panel says so)'
 Assert (($pjs -match 'server_emergency_fallback') -and ($pjs -match 'Drafted by the server \(emergency check\)')) 'a proposal drafted by the server is labelled as such in the proposals panel'
+Assert (($mjs -notmatch 'next stage') -and ($mjs -notmatch 'later stage') -and ($mjs -match 'review them with the Proposals button')) 'the manager view no longer says that approvals come later'
 Assert (($mjs -match 'emergency_proposal_fallback') -and ($mjs -match 'The server drafted the emergency proposal because the assistant had not')) 'the manager''s conversation view says when the server drafted the emergency proposal'
 $appjs = [System.IO.File]::ReadAllText((Join-Path $root 'app.js'))
 Assert ($appjs.Contains('ai_summary: row.ai_summary || ""')) 'an applied AI summary is saved with the ticket edits, so it survives a reload'

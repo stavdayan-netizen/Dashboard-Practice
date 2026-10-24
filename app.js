@@ -680,15 +680,26 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
   }
 
   // What the ticket table shows in the Issue column. For a request submitted through the demo tenant portal it is a short, factual label:
-  // the AI summary once the manager has approved and applied one, otherwise the short piece of the tenant's own words stored with the ticket.
-  // The original text (row.issue) is never changed; the details dialog shows it in full and the table keeps it as a tooltip.
+  // the FIRST SENTENCE of the AI summary once the manager has approved and applied one (the full summary stays in the details dialog),
+  // otherwise the short piece of the tenant's own words stored with the ticket. The original text (row.issue) is never changed; the
+  // details dialog shows it in full and the table keeps it as a tooltip. Every label is at most 120 characters (plus an ellipsis).
+  const ISSUE_LABEL_MAX = 120;
+  function firstSentence(text) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    const m = t.match(new RegExp("^(.{10," + ISSUE_LABEL_MAX + "}?[.!?])(\\s|$)"));
+    if (m) return m[1];
+    if (t.length <= ISSUE_LABEL_MAX) return t;
+    let cut = t.slice(0, ISSUE_LABEL_MAX - 1);
+    const sp = cut.lastIndexOf(" ");
+    if (sp > 40) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:]+$/, "") + "\u2026";
+  }
   function issueLabel(row) {
-    const clip = (s) => (s.length > 140 ? s.slice(0, 139).replace(/\s+\S*$/, "") + "\u2026" : s);
     const d = DEMO_MODE && row.demo && row.demo.portal_submitted ? row.demo : null;
     if (d) {
-      if (d.summary_approved && row.ai_summary) return clip(row.ai_summary);
-      if (d.issue_summary) return clip(d.issue_summary);
-      return clip(row.issue || "");
+      if (d.summary_approved && row.ai_summary) return firstSentence(row.ai_summary);
+      if (d.issue_summary) return firstSentence(d.issue_summary);
+      return firstSentence(row.issue || "");
     }
     return row.issue;
   }

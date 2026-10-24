@@ -4,11 +4,11 @@ Written 2026-10-24 at the end of Stage 6.5. **No paid call is made until the own
 
 ## 1. What this plan is for
 
-The mocked suites (729 checks) prove what the **server** guarantees whatever the model says. They cannot show how the **real model** behaves in the new flow (a request submitted from the portal, the assistant starting the conversation, proposals reviewed by the manager). The earlier live tests (dishwasher, fridge, dishwasher filter, gas on Haiku 5.5, about $0.016 in total) covered the agent before the portal flow existed. This plan closes the remaining gaps, in small batches, each with its own approval.
+The mocked suites (784 checks) prove what the **server** guarantees whatever the model says. They cannot show how the **real model** behaves in the new flow (a request submitted from the portal, the assistant starting the conversation, proposals reviewed by the manager). The earlier live tests (dishwasher, fridge, dishwasher filter, gas on Haiku 5.5, about $0.016 in total) covered the agent before the portal flow existed. This plan closes the remaining gaps, in small batches, each with its own approval.
 
 ## 2. State at the start
 
-- All five suites pass: tools 255, loop 220, routes 86, chat 131, scenarios 37 (729). Transcripts of the mocked scenarios: `agent/scenarios/SCENARIOS.md`. Browser fault-injection results: `agent/scenarios/FAILURE_TESTS.md`.
+- All five suites pass: tools 265, loop 247, routes 86, chat 140, scenarios 46 (784). Transcripts of the mocked scenarios: `agent/scenarios/SCENARIOS.md`. Browser fault-injection results: `agent/scenarios/FAILURE_TESTS.md`.
 - Model: Haiku 5.5, effort medium, spend limits $0.25 per run, $1 per day, $5 in total (about $0.016 used). Prompt: base unchanged, addendum revision 5 (hash-guarded).
 - `agent-data/` holds the portal test ticket and conversation from the owner's first manual test. Back it up (outside the repo) and clear it before the batches, as in phase 6.0.
 

@@ -1,7 +1,7 @@
 // AI conversations for the property manager, inside the ticket details of the demo dashboard (?demo=1). DEMO ONLY.
 // Read-only: it lists the conversations the assistant had about the open ticket, with timestamps, which messages came from the
 // model or from the fixed fail-safe, what the assistant did behind the scenes (tools used, safety replacements), and how many
-// proposals it drafted. Approving or rejecting proposals is a later stage; nothing here can change a ticket.
+// proposals it drafted. Proposals are reviewed, approved and applied in the separate Proposals panel (agent-proposals.js); nothing here can change a ticket.
 //
 // It uses the local manager routes of serve.ps1. There is NO sign-in in the demo: those routes work only because the server
 // listens on localhost. Real use needs proper authentication and authorization (see agent/STAGE6_PLAN.md).
@@ -109,7 +109,7 @@
     facts.appendChild(el("div", null, "Tools the assistant used: " + (t.toolList.length ? t.toolList.join(", ") : "none")));
     t.notes.forEach((n) => facts.appendChild(el("div", "agent-note", n)));
     const pending = proposals.filter((p) => p.status === "pending").length;
-    facts.appendChild(el("div", null, "Drafted change proposals: " + proposals.length + (proposals.length ? " (" + pending + " pending; approvals come in the next stage)" : "")));
+    facts.appendChild(el("div", null, "Drafted change proposals: " + proposals.length + (proposals.length ? " (" + pending + " pending; review them with the Proposals button)" : "")));
     if (conv.model) facts.appendChild(el("div", "agent-muted", "Model: " + conv.model));
     det.appendChild(facts);
 
