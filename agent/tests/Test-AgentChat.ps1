@@ -84,15 +84,16 @@ Assert (($app -match 'if \(DEMO_MODE && window\.AgentManagerDemo\) window\.Agent
 Assert (($app -match 'fetch\("/api/agent/manager/submitted-tickets"') -and (@([regex]::Matches($app, '/api/agent/')).Count -eq 1)) 'app.js makes exactly one agent request (the list of portal tickets)'
 Assert (-not ($mcss -match '(?m)^(body|html|main|\.card|\.btn|table|tr|td|th)\b') -and ($mcss -notmatch '#[0-9a-fA-F]{3,6}')) 'the manager stylesheet is scoped and uses the dashboard colour variables'
 
-Section 'Stage 6.3 proposals panel: agent-proposals.js (read-only, demo and localhost only)'
+Section 'Stage 6.3 and 6.4 proposals panel: agent-proposals.js (review, approve, reject and apply; demo and localhost only)'
 $pjs = [System.IO.File]::ReadAllText((Join-Path $root 'agent-proposals.js'))
 $pcss = [System.IO.File]::ReadAllText((Join-Path $root 'agent-proposals.css'))
 Assert (($pjs -match 'if \(!/\[\?&\]demo\(=\|&\|\$\)/\.test\(location\.search\)\) return;') -and ($pjs -match 'if \(!/\^\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)\$/\.test\(location\.hostname\)\) return;')) 'the proposals panel does nothing without ?demo or off localhost'
 foreach ($bad in 'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'eval(', 'new Function') { Assert (-not $pjs.Contains($bad)) "agent-proposals.js does not use $bad" }
-Assert (-not ($pjs -match '(?i)method\s*:|\bPOST\b|\bPUT\b|\bDELETE\b|\bPATCH\b|/decide|/applied')) 'the proposals panel only reads: no request method, no decide or apply route'
+Assert ((@([regex]::Matches($pjs, 'method\s*:')).Count -eq 1) -and ($pjs -match 'async function postJson[\s\S]{0,300}method: "POST"') -and -not ($pjs -cmatch '\bPUT\b|\bDELETE\b|\bPATCH\b')) 'the only request that is not a GET is the one POST helper (no PUT, DELETE or PATCH)'
 $ppaths = @([regex]::Matches($pjs, '"(/api/agent/[^"?]*)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
-Assert ((@($ppaths | Where-Object { $_ -notmatch '^/api/agent/(status|manager/proposals)$' }).Count -eq 0) -and ($ppaths.Count -eq 2)) ('the proposals panel uses only the status and proposals routes (' + ($ppaths -join ', ') + ')')
-Assert (-not ($pjs -match '(?i)approve\w*\(|reject\w*\(|decision\s*:|\.decide|Approve"|Reject"|Apply"')) 'the panel has no approve, reject or apply control'
+Assert ((@($ppaths | Where-Object { $_ -notmatch '^/api/agent/(status|manager/proposals(/decide|/applied)?)$' }).Count -eq 0) -and ($ppaths.Count -eq 4)) ('the panel uses only the status route and the manager proposal routes (list, decide, applied): ' + ($ppaths -join ', '))
+Assert (([regex]::Matches($pjs, 'postJson\("([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notmatch '^/api/agent/manager/proposals/(decide|applied)$' }).Count -eq 0) 'POST goes only to the decide and applied routes'
+Assert (($pjs -notmatch '/api/agent/tenant') -and ($pjs -notmatch '/proposals/(approve|reject|delete)')) 'the panel never calls a tenant route or an unknown proposal route'
 Assert (($pjs -notmatch '(?i)\.usd|input_tokens|output_tokens|cache_read|cache_write|spend|system_prompt|tenant_token|api[_-]?key|sk-ant|anthropic')) 'costs, token counts, prompts and keys are never read or shown'
 Assert (($pjs -notmatch 'localStorage') -and ($pjs -notmatch 'sessionStorage')) 'the proposals panel stores nothing in the browser'
 Assert ($pjs.Contains('e.textContent = text') -and $pjs.Contains('createTextNode')) 'server text is placed with textContent and text nodes only'
@@ -100,6 +101,19 @@ Assert (($pjs -match 'claimed_but_not_delivered') -and ($pjs -match 'Check befor
 Assert (($pjs -match 'isEmergency\(a\) \? 0 : 1') -and ($pjs -match 'agent-pp-card--emergency')) 'emergency proposals are listed first and marked'
 Assert (($pjs -match 'not stored on the ticket') -and ($pjs -match 'this ticket is not in the dashboard')) 'each proposal is compared with the ticket''s current values, with a clear note when there is none'
 Assert (($pjs -match 'role", "alert"') -and ($pjs -match 'aria-modal')) 'the emergency banner is an alert and the panel is a modal dialog'
+Assert (([regex]::Matches($pjs, 'updateTicket\(')).Count -eq 1) 'the ticket is changed from exactly one place (the apply step)'
+$ui = $pjs.IndexOf('go.addEventListener("click", async () => {'); $ut = $pjs.IndexOf('updateTicket(')
+Assert (($ui -gt 0) -and ($ut -gt $ui) -and ($pjs.Substring($ui, $ut - $ui).IndexOf('function ') -lt 0)) 'the ticket is changed only inside the click handler of the confirm button (never automatically)'
+$pollBody = $pjs.Substring($pjs.IndexOf('async function poll()'), 900)
+Assert (($pollBody -notmatch 'decide\(|updateTicket|postJson|applyView') -and ($pjs -notmatch 'setInterval\([^;]*(decide|applyView|updateTicket|postJson)')) 'the periodic refresh never approves, rejects or applies anything'
+Assert (($pjs -notmatch 'fields\.priority') -and ($pjs -notmatch 'priority:') -and ($pjs -match 'The priority is never changed')) 'the priority is never part of an applied change'
+Assert ($pjs.Contains('existing + "\n\n" + f.notes') -and $pjs.Contains('existing.indexOf(f.notes) >= 0')) 'notes are added to the existing notes, never replaced, and adding them twice is skipped'
+Assert ($pjs.Contains('tenant_confirmed_resolution !== true') -and $pjs.Contains('Not applied: the tenant did not confirm')) 'Resolved is applied only with the tenant''s confirmation'
+Assert (($pjs -match 'These changes will be made to the ticket in this browser') -and ($pjs -match 'Apply anyway') -and ($pjs -match 'This was changed after the assistant wrote the proposal') -and ($pjs -match 'based_on')) 'the manager sees every change first, and a ticket edit made since the proposal was written is flagged before applying'
+Assert (($pjs -match 'Approving or rejecting does not change the ticket') -and ($pjs -match 'Nothing has been changed on the ticket yet')) 'the panel says that approving or rejecting changes nothing'
+Assert (($pjs -match 'The ticket was changed in this browser, but the server could not be told') -and ($pjs -match 'The ticket was not changed: ')) 'a failed apply or a failed server update says exactly what happened'
+$appjs = [System.IO.File]::ReadAllText((Join-Path $root 'app.js'))
+Assert ($appjs.Contains('ai_summary: row.ai_summary || ""')) 'an applied AI summary is saved with the ticket edits, so it survives a reload'
 Assert (-not ($pcss -match '(?m)^(body|html|main|\.card|\.btn|table|tr|td|th)\b') -and ($pcss -notmatch '#[0-9a-fA-F]{3,6}\b(?!.*#fff)' -or $pcss -match 'color: #fff;')) 'the proposals stylesheet is scoped'
 Section 'HTTP through serve.ps1 (test port, temporary store, mocked model): the contract the chat relies on'
 $tmp = Join-Path $env:TEMP ('agent-chat-test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))

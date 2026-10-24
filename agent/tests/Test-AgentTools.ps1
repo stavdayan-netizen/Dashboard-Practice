@@ -345,6 +345,21 @@ $o1 = Tool 'draft_ticket_update' @{ fields = @{ notes = 'Other conversation note
 Assert ($o1.data.proposal_id -cne $m1id -and (Pend $otherC).Count -eq 1) 'proposals are merged only within the same conversation'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'demo files are still unchanged'
 
+Section 'proposals remember what the ticket looked like when a field was proposed (based_on)'
+$cBo = New-Conv 'HV-010' $null
+$boBase = Get-TicketBaseline 'HV-010'
+$bo1 = Tool 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Urgent'; category = 'General'; notes = 'Based-on test note.' }; reason = 'bo1' } 'tenant' $cBo
+$boP = Read-JsonFile (Get-ProposalPath $bo1.data.proposal_id)
+Assert (($boP.based_on.category -ceq $boBase.category) -and ($boP.based_on.notes -ceq $boBase.notes) -and ($null -eq $boP.based_on.PSObject.Properties['ai_urgency'])) 'a new proposal records the ticket''s values for the fields it proposes (and none for the urgency, which is not stored on the ticket)'
+$boP.based_on.category = 'EarlierValue'
+Write-JsonFile (Get-ProposalPath $bo1.data.proposal_id) $boP
+$bo2 = Tool 'draft_ticket_update' @{ fields = @{ category = 'Electrical'; ai_handling_status = 'Escalated' }; reason = 'bo2' } 'tenant' $cBo
+$boP2 = Read-JsonFile (Get-ProposalPath $bo1.data.proposal_id)
+Assert (($bo2.data.merged -eq $true) -and ($boP2.based_on.category -ceq 'EarlierValue') -and ($boP2.based_on.ai_handling_status -ceq $boBase.ai_handling_status) -and ($boP2.proposed_fields.category -ceq 'Electrical')) 'a merge keeps the earlier baseline of a field and adds the baseline of a newly proposed one'
+$boAp = Set-ProposalState -Audience 'manager' -ProposalId $bo1.data.proposal_id -Action 'approve' -Note 'ok'
+$boCur = Read-JsonFile (Get-ProposalPath $bo1.data.proposal_id)
+Assert ($boAp.ok -and ($boCur.status -ceq 'approved') -and ($boCur.based_on.category -ceq 'EarlierValue') -and ($script:Demo.Tickets['HV-010'].category -ceq $boBase.category)) 'approving keeps the record and changes nothing on the ticket'
+
 Section 'manager approval boundaries'
 $pid1 = $d1.data.proposal_id
 Assert ((Get-ProposalList -Audience 'tenant').Count -eq 0) 'a tenant sees no proposals'

@@ -1,9 +1,10 @@
 // Change proposals from the AI assistant, for the property manager, in the demo dashboard (?demo=1). DEMO ONLY.
-// READ ONLY: this lists what the assistant proposed for each ticket (compared with the ticket's current values), why, the history, and
-// a warning when the proposal claims instructions that the tenant reply did not contain. It cannot approve, reject or apply anything;
-// that comes in the next stage. Nothing here changes a ticket.
+// It lists what the assistant proposed for each ticket (compared with the ticket's current values), why, the history, and a warning when
+// the proposal claims instructions that the tenant reply did not contain. The manager can approve or reject a pending proposal (this changes
+// NOTHING on the ticket) and, as a separate explicit step, apply an approved proposal to the demo ticket in this browser: the manager sees
+// exactly what will change (and any ticket edit made since the proposal was written) before confirming. Nothing is ever applied automatically.
 //
-// It uses the local manager route of serve.ps1. There is NO sign-in in the demo: that route works only because the server listens on
+// It uses the local manager routes of serve.ps1. There is NO sign-in in the demo: that route works only because the server listens on
 // localhost. Real use needs proper authentication and authorization (see agent/STAGE6_PLAN.md).
 // Server text is shown with textContent only. Costs, token counts, prompts, tool results and keys are never displayed.
 (function () {
@@ -36,6 +37,21 @@
     const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(path, { signal: ctl.signal, cache: "no-store" });
+      let data = null;
+      try { data = await res.json(); } catch (err) { data = null; }
+      return { status: res.status, data };
+    } catch (err) {
+      return { status: 0, data: null };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function postJson(path, body) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal, cache: "no-store" });
       let data = null;
       try { data = await res.json(); } catch (err) { data = null; }
       return { status: res.status, data };
@@ -112,6 +128,179 @@
     return table;
   }
 
+  // ---- what applying a proposal would change in the demo ticket ---------------
+
+  const RX_EQUIP = /^eq-hv-[a-z0-9]+(-[a-z0-9]+)*$/;
+  const sameValue = (a, b) => (Array.isArray(a) || Array.isArray(b))
+    ? JSON.stringify((a || []).slice().sort()) === JSON.stringify((b || []).slice().sort())
+    : String(a) === String(b);
+
+  function currentTyped(row, key) {
+    const demo = row.demo || {};
+    switch (key) {
+      case "category": return row.category;
+      case "status": return row.status;
+      case "summary": return row.ai_summary || "";
+      case "notes": return demo.notes || "";
+      case "emergency_flag": return !!demo.emergency_flag;
+      case "ai_handling_status": return demo.ai_handling_status || "Not Started";
+      case "equipment_ids": return (demo.equipment_ids || []).slice();
+      default: return undefined;
+    }
+  }
+
+  const showTyped = (v) => (Array.isArray(v) ? (v.join(", ") || "none") : typeof v === "boolean" ? (v ? "Yes" : "No") : (String(v) || "-"));
+
+  // The priority is never touched (the assistant cannot propose it). Notes are added to the existing notes, never replaced. Resolved is
+  // applied only when the tenant confirmed it. Returns the list of changes and the patch for DashboardDemo.updateTicket.
+  function computeChanges(p, row) {
+    const f = p.proposed_fields || {};
+    const based = p.based_on || {};
+    const lists = window.DashboardDemo.lists;
+    const changes = [];
+    const patch = { fields: {}, demo: {} };
+    const add = (key, label, after, already, apply, extra) => {
+      const now = currentTyped(row, key);
+      const b = based[key];
+      const conflict = !already && b !== undefined && !sameValue(b, now);
+      changes.push(Object.assign({ key, label, now: showTyped(now), after: showTyped(after), already, conflict }, extra || {}));
+      if (!already && apply) apply();
+    };
+    if (typeof f.category === "string" && lists.categories.indexOf(f.category) >= 0) {
+      add("category", "Category", f.category, row.category === f.category, () => { patch.fields.category = f.category; });
+    }
+    if (f.emergency_flag !== undefined || f.ai_urgency === "Emergency") {
+      const want = f.ai_urgency === "Emergency" ? true : f.emergency_flag === true;
+      add("emergency_flag", "Emergency flag", want, !!(row.demo || {}).emergency_flag === want, () => { patch.demo.emergency_flag = want; });
+    }
+    if (typeof f.ai_handling_status === "string" && lists.aiStatuses.indexOf(f.ai_handling_status) >= 0) {
+      add("ai_handling_status", "AI handling status", f.ai_handling_status, currentTyped(row, "ai_handling_status") === f.ai_handling_status, () => { patch.demo.ai_handling_status = f.ai_handling_status; });
+    }
+    if (typeof f.notes === "string" && f.notes.trim()) {
+      const existing = currentTyped(row, "notes");
+      const merged = existing ? existing + "\n\n" + f.notes : f.notes;
+      add("notes", "Notes (added to the existing notes)", f.notes, existing.indexOf(f.notes) >= 0, () => { patch.demo.notes = merged; }, { addOnly: true });
+    }
+    if (Array.isArray(f.equipment_ids)) {
+      const have = currentTyped(row, "equipment_ids");
+      const ids = f.equipment_ids.filter((x) => typeof x === "string" && RX_EQUIP.test(x));
+      const union = have.concat(ids.filter((x) => have.indexOf(x) < 0));
+      add("equipment_ids", "Linked equipment (added to the existing links)", ids, ids.every((x) => have.indexOf(x) >= 0), () => { patch.demo.equipment_ids = union; }, { addOnly: true });
+    }
+    if (typeof f.summary === "string" && f.summary.trim()) {
+      add("summary", "AI summary", f.summary, (row.ai_summary || "") === f.summary, () => { patch.fields.ai_summary = f.summary; });
+    }
+    if (f.status === "Resolved") {
+      const closed = lists.closedStatuses.indexOf(row.status) >= 0;
+      if (p.tenant_confirmed_resolution !== true) {
+        changes.push({ key: "status", label: "Status", now: row.status, after: "Resolved", already: false, conflict: false, blocked: "Not applied: the tenant did not confirm that it is fixed." });
+      } else {
+        add("status", "Status", "Resolved", closed, () => { patch.fields.status = "Resolved"; patch.fields.date_resolved = window.DashboardDemo.asOfDate(); });
+      }
+    }
+    return { changes, patch };
+  }
+
+  // ---- approve, reject, apply -------------------------------------------------
+
+  function say(box, text, kind) {
+    box.textContent = text;
+    box.className = "agent-pp-msg" + (kind ? " agent-pp-msg--" + kind : "");
+    box.hidden = !text;
+  }
+
+  async function decide(p, decision, note, msgBox, buttons) {
+    buttons.forEach((b) => { b.disabled = true; });
+    const body = { proposal_id: p.id, decision };
+    if (note) body.note = note;
+    const r = await postJson("/api/agent/manager/proposals/decide", body);
+    if (r.status === 200) { await refreshAll(); return; }
+    buttons.forEach((b) => { b.disabled = false; });
+    if (r.status === 409) say(msgBox, "This proposal was already decided. Press Refresh.", "warn");
+    else if (r.status === 400) say(msgBox, "The note could not be saved. Keep it under 500 characters and try again.", "warn");
+    else if (r.status === 0) say(msgBox, "The local demo server is not reachable. Nothing was changed.", "error");
+    else say(msgBox, "The decision could not be saved. Nothing was changed.", "error");
+  }
+
+  async function refreshAll() {
+    lastKey = "";
+    await poll();
+    await renderPanel(true);
+  }
+
+  function applyView(p, row, host) {
+    host.textContent = "";
+    const { changes, patch } = computeChanges(p, row);
+    const work = changes.filter((c) => !c.already && !c.blocked);
+    const conflicts = work.filter((c) => c.conflict);
+    host.appendChild(el("p", "agent-pp-strong", work.length ? "These changes will be made to the ticket in this browser:" : "Nothing is left to change on the ticket; the proposal can just be marked as applied."));
+    changes.forEach((c) => {
+      const line = el("div", "agent-pp-change" + (c.conflict ? " agent-pp-change--warn" : ""));
+      line.appendChild(el("strong", null, c.label + ": "));
+      if (c.blocked) line.appendChild(document.createTextNode(c.blocked));
+      else if (c.already) line.appendChild(document.createTextNode("already in place, nothing to do (" + c.after + ")"));
+      else line.appendChild(document.createTextNode((c.addOnly ? "add " : "") + c.after + (c.addOnly ? "" : "   (now: " + c.now + ")")));
+      if (c.conflict) line.appendChild(el("div", null, "This was changed after the assistant wrote the proposal. Check it before applying."));
+      host.appendChild(line);
+    });
+    host.appendChild(el("p", "agent-pp-muted", "The priority is never changed. The ticket is changed only in this browser (demo)."));
+    const msg = el("div", "agent-pp-msg"); msg.hidden = true;
+    const go = el("button", "btn btn-primary", !work.length ? "Mark as applied" : conflicts.length ? "Apply anyway" : "Apply to the ticket");
+    go.type = "button";
+    const cancel = el("button", "btn btn-ghost", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", () => { host.textContent = ""; host.hidden = true; });
+    go.addEventListener("click", async () => {
+      go.disabled = true; cancel.disabled = true;
+      if (work.length) {
+        const res = window.DashboardDemo.updateTicket(p.ticket_id, patch);
+        if (!res.ok) { say(msg, "The ticket was not changed: " + res.error, "error"); go.disabled = false; cancel.disabled = false; return; }
+      }
+      const r = await postJson("/api/agent/manager/proposals/applied", { proposal_id: p.id });
+      if (r.status === 200) { await refreshAll(); return; }
+      say(msg, work.length ? "The ticket was changed in this browser, but the server could not be told. Close this and press Apply again to mark it as applied." : "The server could not mark it as applied. Try again.", "error");
+      go.disabled = false; cancel.disabled = false;
+    });
+    const bar = el("div", "agent-pp-actions");
+    bar.appendChild(go); bar.appendChild(cancel);
+    host.appendChild(bar);
+    host.appendChild(msg);
+    host.hidden = false;
+  }
+
+  function actionsFor(p, row) {
+    const box = el("div", "agent-pp-decide");
+    const msg = el("div", "agent-pp-msg"); msg.hidden = true;
+    if (p.status === "pending") {
+      const note = el("input", "agent-pp-note");
+      note.type = "text"; note.maxLength = 500; note.placeholder = "Note (optional)";
+      note.setAttribute("aria-label", "Note for this decision");
+      const approve = el("button", "btn btn-primary", "Approve");
+      approve.type = "button";
+      const reject = el("button", "btn btn-secondary", "Reject");
+      reject.type = "button";
+      const bar = el("div", "agent-pp-actions");
+      bar.appendChild(approve); bar.appendChild(reject);
+      box.appendChild(note); box.appendChild(bar);
+      box.appendChild(el("p", "agent-pp-muted", "Approving or rejecting does not change the ticket."));
+      approve.addEventListener("click", () => decide(p, "approve", note.value.trim(), msg, [approve, reject]));
+      reject.addEventListener("click", () => decide(p, "reject", note.value.trim(), msg, [approve, reject]));
+    } else if (p.status === "approved") {
+      if (!row) {
+        box.appendChild(el("p", "agent-pp-muted", "Approved. To apply it, the ticket must be in this dashboard (it is not in this browser's ticket list)."));
+      } else {
+        const host = el("div", "agent-pp-apply"); host.hidden = true;
+        const open = el("button", "btn btn-primary", "Review and apply to the ticket\u2026");
+        open.type = "button";
+        open.addEventListener("click", () => applyView(p, row, host));
+        box.appendChild(el("p", "agent-pp-muted", "Approved. Nothing has been changed on the ticket yet."));
+        box.appendChild(open); box.appendChild(host);
+      }
+    }
+    box.appendChild(msg);
+    return box;
+  }
+
   // ---- one proposal card ---------------------------------------------------
 
   function replyCheckBlock(p) {
@@ -173,6 +362,7 @@
       wrap.appendChild(d);
     }
     if (p.decision_note) wrap.appendChild(el("p", "agent-pp-muted", "Manager note: " + String(p.decision_note)));
+    wrap.appendChild(actionsFor(p, row));
     return wrap;
   }
 
@@ -210,7 +400,7 @@
     head.appendChild(title);
     head.appendChild(ui.close);
     box.appendChild(head);
-    box.appendChild(el("p", "agent-pp-muted", "Read only. These are suggestions from the assistant; nothing changes on a ticket. Approving, rejecting and applying come in the next stage."));
+    box.appendChild(el("p", "agent-pp-muted", "These are suggestions from the assistant. Approving or rejecting does not change a ticket; applying an approved proposal is a separate step that shows you every change first."));
     const bar = el("div", "agent-pp-bar");
     ui.filter = el("select");
     ui.filter.setAttribute("aria-label", "Show proposals");

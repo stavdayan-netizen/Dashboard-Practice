@@ -2591,7 +2591,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     demoOverrides.tickets[id] = {
       fields: {
         status: row.status, priority: row.priority, category: row.category, assigned_to: row.assigned_to,
-        date_resolved: row.date_resolved, cost: row.cost === null ? "" : String(row.cost), cost_date: row.cost_date
+        date_resolved: row.date_resolved, cost: row.cost === null ? "" : String(row.cost), cost_date: row.cost_date,
+        ai_summary: row.ai_summary || ""
       },
       demo: cloneJson(row.demo || {})
     };

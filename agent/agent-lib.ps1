@@ -808,6 +808,7 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
             $pending = @($all | Where-Object { $_.status -ceq 'pending' } | Sort-Object { $_.created_at })
             $target = $(if ($pending.Count -gt 0) { $pending[$pending.Count - 1] } else { $null })
             # what the ticket would already look like: current values, then approved (not yet applied) proposals, then the pending one
+            $ticketBase = Get-TicketBaseline $tid
             $base = Get-TicketBaseline $tid
             foreach ($a in @($all | Where-Object { $_.status -ceq 'approved' } | Sort-Object { $_.created_at })) { foreach ($p in $a.proposed_fields.PSObject.Properties) { $base[$p.Name] = $p.Value } }
             if ($target) { foreach ($p in $target.proposed_fields.PSObject.Properties) { $base[$p.Name] = $p.Value } }
@@ -834,6 +835,12 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
                 $fieldsAuto = @(@($target.auto_added_fields) + $autoKept + @($m.auto) | Where-Object { $_ } | Select-Object -Unique)
                 $confirmedMerged = $(if ($m.fields.Contains('status')) { $(if ($keep.Contains('status')) { $confirmed } else { [bool]$target.tenant_confirmed_resolution }) } else { $false })
                 $earlier = @(@(Get-Prop $target 'earlier_reasons' @()) + @([string]$target.reason) | Where-Object { $_ })
+                # what the ticket looked like when each proposed field was first proposed (the manager uses it to spot later edits)
+                $basedOn = [ordered]@{}
+                $oldBased = Get-Prop $target 'based_on' $null
+                if ($oldBased) { foreach ($bp in $oldBased.PSObject.Properties) { $basedOn[$bp.Name] = $bp.Value } }
+                foreach ($k in $m.fields.Keys) { if (-not $basedOn.Contains($k) -and $ticketBase.Contains($k)) { $basedOn[$k] = $ticketBase[$k] } }
+                $target | Add-Member -NotePropertyName based_on -NotePropertyValue $basedOn -Force
                 $target.proposed_fields = $m.fields; $target.auto_added_fields = @($fieldsAuto); $target.reason = $reason
                 $target | Add-Member -NotePropertyName earlier_reasons -NotePropertyValue @($earlier) -Force
                 $target.tenant_confirmed_resolution = $confirmedMerged
@@ -843,9 +850,11 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
                 return (New-Result $true $tool $Audience ([ordered]@{ proposal_id = $target.id; status = 'pending'; duplicate = $false; merged = $true }))
             }
             $pid2 = New-RandomId 'prop'
+            $basedNew = [ordered]@{}
+            foreach ($k in $keep.Keys) { if ($ticketBase.Contains($k)) { $basedNew[$k] = $ticketBase[$k] } }
             $prop = [ordered]@{
                 schema = 'proposal.v1'; id = $pid2; conversation_id = $Conv.id; ticket_id = $tid
-                proposed_fields = $keep; auto_added_fields = @($autoKept); reason = $reason
+                proposed_fields = $keep; based_on = $basedNew; auto_added_fields = @($autoKept); reason = $reason
                 tenant_confirmed_resolution = $confirmed; fields_hash = (Get-FieldsHash $tid $keep)
                 status = 'pending'; created_at = $now; decided_at = $null; applied_at = $null; decision_note = $null
                 history = @([ordered]@{ ts = $now; event = 'created'; by = 'agent' })
