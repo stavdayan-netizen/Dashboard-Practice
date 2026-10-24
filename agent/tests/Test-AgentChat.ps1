@@ -79,11 +79,28 @@ Assert (($mjs -notmatch '(?i)\.usd|input_tokens|output_tokens|cache_read|cache_w
 Assert (-not ($mjs -match '(?i)\.input\b|tool_result|\.result\b')) 'tool inputs and results are not shown (only tool names and outcomes)'
 Assert ($mjs.Contains('e.textContent = text') -and $mjs.Contains('createTextNode')) 'server text is placed with textContent and text nodes only'
 Assert (($mjs -notmatch 'localStorage') -and ($mjs -notmatch 'sessionStorage')) 'the manager view stores nothing in the browser'
-Assert (($idx -notmatch '<script[^>]+src="agent-manager\.js"') -and ($idx -match 'agent-manager\.js') -and ($idx -match '\[\?&\]demo\(=\|&\|\$\)') -and ($idx -match '\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)')) 'index.html adds agent-manager.js only in demo mode on localhost (no static script tag)'
+Assert (($idx -notmatch '<script[^>]+src="agent-(manager|proposals)\.js"') -and ($idx -match '"agent-manager", "agent-proposals"') -and ($idx -match '\[\?&\]demo\(=\|&\|\$\)') -and ($idx -match '\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)')) 'index.html adds agent-manager and agent-proposals only in demo mode on localhost (no static script tag)'
 Assert (($app -match 'if \(DEMO_MODE && window\.AgentManagerDemo\) window\.AgentManagerDemo\.decorate\(row, body\);') -and ($app -match 'async function fetchPortalTickets\(\) \{\s*if \(!/\^\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)\$/\.test\(location\.hostname\)\) return \[\];')) 'the dashboard hooks are demo-only and the portal-ticket request is made only on localhost'
 Assert (($app -match 'fetch\("/api/agent/manager/submitted-tickets"') -and (@([regex]::Matches($app, '/api/agent/')).Count -eq 1)) 'app.js makes exactly one agent request (the list of portal tickets)'
 Assert (-not ($mcss -match '(?m)^(body|html|main|\.card|\.btn|table|tr|td|th)\b') -and ($mcss -notmatch '#[0-9a-fA-F]{3,6}')) 'the manager stylesheet is scoped and uses the dashboard colour variables'
 
+Section 'Stage 6.3 proposals panel: agent-proposals.js (read-only, demo and localhost only)'
+$pjs = [System.IO.File]::ReadAllText((Join-Path $root 'agent-proposals.js'))
+$pcss = [System.IO.File]::ReadAllText((Join-Path $root 'agent-proposals.css'))
+Assert (($pjs -match 'if \(!/\[\?&\]demo\(=\|&\|\$\)/\.test\(location\.search\)\) return;') -and ($pjs -match 'if \(!/\^\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)\$/\.test\(location\.hostname\)\) return;')) 'the proposals panel does nothing without ?demo or off localhost'
+foreach ($bad in 'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'eval(', 'new Function') { Assert (-not $pjs.Contains($bad)) "agent-proposals.js does not use $bad" }
+Assert (-not ($pjs -match '(?i)method\s*:|\bPOST\b|\bPUT\b|\bDELETE\b|\bPATCH\b|/decide|/applied')) 'the proposals panel only reads: no request method, no decide or apply route'
+$ppaths = @([regex]::Matches($pjs, '"(/api/agent/[^"?]*)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+Assert ((@($ppaths | Where-Object { $_ -notmatch '^/api/agent/(status|manager/proposals)$' }).Count -eq 0) -and ($ppaths.Count -eq 2)) ('the proposals panel uses only the status and proposals routes (' + ($ppaths -join ', ') + ')')
+Assert (-not ($pjs -match '(?i)approve\w*\(|reject\w*\(|decision\s*:|\.decide|Approve"|Reject"|Apply"')) 'the panel has no approve, reject or apply control'
+Assert (($pjs -notmatch '(?i)\.usd|input_tokens|output_tokens|cache_read|cache_write|spend|system_prompt|tenant_token|api[_-]?key|sk-ant|anthropic')) 'costs, token counts, prompts and keys are never read or shown'
+Assert (($pjs -notmatch 'localStorage') -and ($pjs -notmatch 'sessionStorage')) 'the proposals panel stores nothing in the browser'
+Assert ($pjs.Contains('e.textContent = text') -and $pjs.Contains('createTextNode')) 'server text is placed with textContent and text nodes only'
+Assert (($pjs -match 'claimed_but_not_delivered') -and ($pjs -match 'Check before relying on this proposal')) 'a claim the tenant reply did not contain is shown as a warning'
+Assert (($pjs -match 'isEmergency\(a\) \? 0 : 1') -and ($pjs -match 'agent-pp-card--emergency')) 'emergency proposals are listed first and marked'
+Assert (($pjs -match 'not stored on the ticket') -and ($pjs -match 'this ticket is not in the dashboard')) 'each proposal is compared with the ticket''s current values, with a clear note when there is none'
+Assert (($pjs -match 'role", "alert"') -and ($pjs -match 'aria-modal')) 'the emergency banner is an alert and the panel is a modal dialog'
+Assert (-not ($pcss -match '(?m)^(body|html|main|\.card|\.btn|table|tr|td|th)\b') -and ($pcss -notmatch '#[0-9a-fA-F]{3,6}\b(?!.*#fff)' -or $pcss -match 'color: #fff;')) 'the proposals stylesheet is scoped'
 Section 'HTTP through serve.ps1 (test port, temporary store, mocked model): the contract the chat relies on'
 $tmp = Join-Path $env:TEMP ('agent-chat-test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $envdir = Join-Path $tmp 'env'
@@ -147,6 +164,13 @@ try {
         Assert (($x.status -eq 200) -and ($x.type -like 'application/javascript*')) 'agent-manager.js is served as JavaScript'
         $x = Http 'GET' '/agent-manager.css'
         Assert (($x.status -eq 200) -and ($x.type -like 'text/css*')) 'agent-manager.css is served as CSS'
+        $x = Http 'GET' '/agent-proposals.js'
+        Assert (($x.status -eq 200) -and ($x.type -like 'application/javascript*')) 'agent-proposals.js is served as JavaScript'
+        $x = Http 'GET' '/agent-proposals.css'
+        Assert (($x.status -eq 200) -and ($x.type -like 'text/css*')) 'agent-proposals.css is served as CSS'
+        $x = Http 'GET' '/api/agent/manager/proposals?status=pending'
+        Assert (($x.status -eq 200) -and (($x.text | ConvertFrom-Json).PSObject.Properties.Name -contains 'proposals') -and ($x.text -notlike '*sk-ant*') -and ($x.text -notlike '*tenant_token*')) 'the pending proposals route answers with a proposals list and no key or token'
+        Assert ((Http 'GET' '/api/agent/manager/proposals?status=nonsense').status -eq 400) 'an unknown proposal status is refused (400)'
         $x = Http 'GET' '/api/agent/manager/submitted-tickets'
         $stj = $x.text | ConvertFrom-Json
         $mine = @($stj.tickets | Where-Object { $_.row.id -ceq $s.ticket_id })

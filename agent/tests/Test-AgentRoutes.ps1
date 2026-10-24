@@ -124,6 +124,7 @@ Assert (($fg.data.status -ceq 'done') -and ($fg.data.reply -ceq $gas)) 'the emer
 $mp = J (Api 'GET' '/api/agent/manager/proposals' @{ status = 'pending' })
 $gp = @($mp.proposals | Where-Object { $_.conversation_id -ceq $conv3 })
 Assert (($gp.Count -eq 1) -and ($gp[0].proposed_fields.emergency_flag -eq $true) -and ($gp[0].proposed_fields.ai_handling_status -ceq 'Escalated')) 'the manager sees the pending Emergency proposal'
+Assert (($gp.Count -eq 1) -and $gp[0].reply_check -and (@($gp[0].reply_check.PSObject.Properties.Name) -contains 'claimed_but_not_delivered') -and (@($gp[0].reply_check.PSObject.Properties.Name) -contains 'delivered_in_reply') -and (@($gp[0].history).Count -ge 2) -and ($gp[0].reason) -and ($gp[0].created_at)) 'the manager proposal list carries the reply check, history, reason and time that the proposals panel shows'
 $mc = J (Api 'GET' '/api/agent/manager/conversations' @{ ticket_id = 'HV-004' })
 $mcc = @($mc.conversations | Where-Object { $_.id -ceq $conv3 })
 Assert (($mcc.Count -eq 1) -and (@($mcc[0].trace | Where-Object { $_.tool -ceq 'draft_ticket_update' }).Count -eq 1) -and (@($mcc[0].proposals).Count -eq 1)) 'the manager view has the trace and the proposal'

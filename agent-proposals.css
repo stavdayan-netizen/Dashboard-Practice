@@ -1,0 +1,211 @@
+/* Change proposals panel, header button and emergency banner (demo only, read only). Uses the dashboard's CSS variables. */
+
+.agent-pp-btn {
+  position: relative;
+}
+
+.agent-pp-count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.agent-pp-count--emergency {
+  background: var(--color-urgent);
+}
+
+.agent-pp-banner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-urgent-border);
+  border-radius: var(--radius-md);
+  background: var(--color-urgent-bg);
+  color: var(--color-urgent);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-pp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(16, 24, 40, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 12px;
+  overflow-y: auto;
+}
+
+.agent-pp-overlay[hidden],
+.agent-pp-banner[hidden] {
+  display: none !important;
+}
+
+.agent-pp-box {
+  min-width: 0;
+  width: min(760px, 100%);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 16px 18px 20px;
+}
+
+.agent-pp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-pp-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.agent-pp-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.agent-pp-bar select {
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+  background: var(--color-card);
+  color: var(--color-text);
+}
+
+.agent-pp-muted {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.agent-pp-empty {
+  margin: 16px 0;
+  color: var(--color-text-muted);
+}
+
+.agent-pp-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.agent-pp-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.agent-pp-card--emergency {
+  border-color: var(--color-urgent-border);
+  box-shadow: inset 4px 0 0 var(--color-urgent);
+}
+
+.agent-pp-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-pp-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.agent-pp-badge--emergency {
+  background: var(--color-urgent-bg);
+  border-color: var(--color-urgent-border);
+  color: var(--color-urgent);
+  text-transform: none;
+}
+
+.agent-pp-ticket {
+  text-align: left;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-pp-check {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-light);
+  font-size: 0.85rem;
+}
+
+.agent-pp-check--warn {
+  background: var(--color-high-bg);
+  border: 1px solid var(--color-high-border);
+  color: var(--color-high);
+}
+
+.agent-pp-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 8px 0;
+}
+
+.agent-pp-table th,
+.agent-pp-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.agent-pp-field {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-pp-new {
+  background: var(--color-accent-light);
+}
+
+.agent-pp-same {
+  color: var(--color-text-muted);
+}
+
+.agent-pp-reason {
+  margin: 6px 0;
+  font-size: 0.88rem;
+}
+
+.agent-pp-details {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+@media (max-width: 520px) {
+  .agent-pp-field {
+    white-space: normal;
+  }
+}
