@@ -412,18 +412,26 @@
   function pollRun(runId, mine) {
     const started = Date.now();
     let failures = 0;
+    let forbidden = 0;
     const tick = async () => {
       if (mine !== epoch || !session) return;
       const r = await api("GET", "/api/agent/tenant/result?conversation_id=" + encodeURIComponent(session.conversation_id) + "&run_id=" + encodeURIComponent(runId), undefined, session.token);
       if (mine !== epoch || !session) return;
       if (r.status === 200 && r.data && r.data.status === "running") {
-        failures = 0;
+        failures = 0; forbidden = 0;
         if (Date.now() - started > POLL_LIMIT_MS) { finishRun(null, "This is taking longer than expected. Your request is saved; you can try again in a moment.", true); return; }
         setTimeout(tick, POLL_MS); return;
       }
       if (r.status === 200 && r.data && r.data.status === "done" && typeof r.data.reply === "string") { finishRun(r.data.reply); return; }
       if (r.status === 200 && r.data && r.data.status === "failed") { runFailed(); return; }
-      if (r.status === 403) { expired(); return; }
+      if (r.status === 403) {
+        // While a reply is being written the server can briefly fail to find the conversation; only a refusal that
+        // repeats means the session really is gone.
+        forbidden++;
+        if (forbidden >= 3) { expired(); return; }
+        setTimeout(tick, 700); return;
+      }
+      forbidden = 0;
       if (r.status === 404) { await refreshTranscript(); return; }
       failures++;
       if (failures > POLL_NETWORK_RETRIES) { finishRun(null, "Lost the connection to the demo server. Reload the page to check for the reply.", true); return; }

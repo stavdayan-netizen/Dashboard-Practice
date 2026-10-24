@@ -247,4 +247,5 @@ HV-901 exists only in a temporary copy of the demo data created by `Run-LiveTest
 - Storage is plain files on one machine (`agent-data/`, git-ignored): currently 6 test conversations and 5 proposals, all fictional.
 - A live reply takes a few seconds and runs in a background process; there is no streaming.
 - The Anthropic prices in `agent-config.ps1` are a local table; the Console shows the real bill.
-- No chat UI, manager conversation view or approval screen yet (Stage 6, see `agent/STAGE6_PLAN.md`, proposed only).
+- A local file is written by one process while another reads it (page polling, background runs): writes are atomic swaps with retries and reads retry, covered by concurrency tests; plain files on one machine are still not a database.
+- No approval screen yet (Stage 6, see `agent/STAGE6_PLAN.md`, proposed only).

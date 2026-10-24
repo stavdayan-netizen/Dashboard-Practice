@@ -509,6 +509,39 @@ foreach ($aud in 'tenant', 'server', '') { Assert (-not (Get-SubmittedTicketList
 Assert ((Get-SubmittedTicketList -Audience 'manager').ok -and (@((Get-SubmittedTicketList -Audience 'manager').data.tickets).Count -eq $stlIds.Count)) 'a damaged file in the store does not break the manager list'
 [System.IO.File]::Delete((Join-Path $ticketsDir 'tkt-HV-888.json'))
 
+Section 'a file being rewritten is never seen missing or half written (found when a live reply was written while the page polled)'
+$raceFile = Join-Path $tmp 'race.json'
+Write-JsonFile $raceFile ([ordered]@{ n = 0; pad = ('x' * 4000) })
+$writerJob = Start-Job -ArgumentList $root, $raceFile -ScriptBlock {
+    param($Root, $File)
+    . (Join-Path $Root 'agent\agent-lib.ps1')
+    for ($i = 1; $i -le 300; $i++) { Write-JsonFile $File ([ordered]@{ n = $i; pad = ('x' * 4000) }) }
+}
+$bad = 0; $reads = 0
+while ($writerJob.State -eq 'Running') {
+    $reads++
+    if (-not (Test-FileThere $raceFile)) { $bad++; continue }
+    try { $o = Read-JsonFile $raceFile; if ($null -eq $o -or $o.pad.Length -ne 4000) { $bad++ } } catch { $bad++ }
+}
+[void](Receive-Job $writerJob -Wait -ErrorAction SilentlyContinue); Remove-Job $writerJob -Force
+Assert (($reads -gt 20) -and ($bad -eq 0)) "while another process rewrites a file 300 times, $reads reads never found it missing or unreadable (bad: $bad)"
+Assert (@(Get-ChildItem -LiteralPath $tmp -Filter 'race.json*' -File).Count -eq 1) 'no temporary file is left behind by the rewrites'
+
+# the real case: a conversation being appended to by another process while its token is checked, as the page polls
+$cRace = New-Conv 'HV-010' $null
+$raceTok = (Get-Content -LiteralPath (Get-ConversationPath $cRace) -Raw | ConvertFrom-Json)
+$tokenRace = (New-Conversation -TicketId 'HV-010')
+$cr2 = $tokenRace.data.conversation_id; $tok2 = $tokenRace.data.tenant_token
+$job2 = Start-Job -ArgumentList $root, $store, $cr2 -ScriptBlock {
+    param($Root, $Store, $Conv)
+    . (Join-Path $Root 'agent\agent-lib.ps1')
+    Initialize-AgentLib -ProjectRoot $Root -StoreDir $Store
+    for ($i = 1; $i -le 60; $i++) { [void](Add-ConversationMessage -ConversationId $Conv -Role $(if ($i % 2) { 'tenant' } else { 'assistant' }) -Text ("message $i " + ('y' * 300))) }
+}
+$badTok = 0; $tokReads = 0
+while ($job2.State -eq 'Running') { $tokReads++; if (-not (Test-ConversationToken $cr2 $tok2)) { $badTok++ } }
+[void](Receive-Job $job2 -Wait -ErrorAction SilentlyContinue); Remove-Job $job2 -Force
+Assert (($tokReads -gt 5) -and ($badTok -eq 0) -and (@((Read-Conversation $cr2).messages).Count -eq 60)) "while another process appends 60 messages, $tokReads token checks never failed (bad: $badTok) and all messages are stored"
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'

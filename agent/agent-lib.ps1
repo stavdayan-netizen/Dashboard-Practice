@@ -67,14 +67,45 @@ function New-Result([bool]$Ok, [string]$Tool, [string]$Audience, $Data = $null, 
 }
 
 function Write-JsonFile([string]$Path, $Object) {
+    # Write to a temporary file, then swap it in with one atomic replace, so another process that reads the file at the same
+    # moment (a page polling while a background run writes) sees the old or the new content, never a missing or half-written file.
+    # A reader that holds the file open makes the swap fail for a moment, so it is retried.
     $json = ConvertTo-Json -InputObject $Object -Depth 12
-    $tmp = "$Path.tmp"
+    $tmp = "$Path.$([guid]::NewGuid().ToString('N').Substring(0, 8)).tmp"
     [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding($false)))
-    Move-Item -LiteralPath $tmp -Destination $Path -Force
+    $done = $false
+    for ($i = 0; $i -lt 40 -and -not $done; $i++) {
+        try {
+            if ([System.IO.File]::Exists($Path)) {
+                $bak = "$tmp.bak"
+                [System.IO.File]::Replace($tmp, $Path, $bak)
+                [System.IO.File]::Delete($bak)
+            }
+            else { [System.IO.File]::Move($tmp, $Path) }
+            $done = $true
+        }
+        catch { Start-Sleep -Milliseconds 25 }
+    }
+    if (-not $done) { [System.IO.File]::Delete($tmp); throw "Could not write $Path" }
+}
+
+function Test-FileThere([string]$Path) {
+    # True if the file exists. While another process swaps a file in, it can be missing for a few milliseconds, so look again briefly.
+    for ($i = 0; $i -lt 6; $i++) {
+        if ([System.IO.File]::Exists($Path)) { return $true }
+        Start-Sleep -Milliseconds 30
+    }
+    return $false
 }
 
 function Read-JsonFile([string]$Path) {
-    return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json)
+    # The file may be swapped by another process just now; a short retry covers a momentary sharing conflict.
+    $last = $null
+    for ($i = 0; $i -lt 8; $i++) {
+        try { return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json) }
+        catch { $last = $_; Start-Sleep -Milliseconds 25 }
+    }
+    throw $last
 }
 
 function New-RandomId([string]$Prefix) {
@@ -179,7 +210,7 @@ function Get-ProposalPath([string]$Id) {
 
 function Read-Conversation([string]$Id) {
     $path = Get-ConversationPath $Id
-    if ($null -eq $path -or -not (Test-Path -LiteralPath $path)) { return $null }
+    if ($null -eq $path -or -not (Test-FileThere $path)) { return $null }
     return (Read-JsonFile $path)
 }
 

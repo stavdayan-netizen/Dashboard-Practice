@@ -16,6 +16,7 @@ $js = [System.IO.File]::ReadAllText((Join-Path $root 'agent-chat.js'))
 $css = [System.IO.File]::ReadAllText((Join-Path $root 'agent-chat.css'))
 $html = [System.IO.File]::ReadAllText((Join-Path $root 'tenant.html'))
 $demoBefore = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
+$realTicketsBefore = @(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\tickets') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length }) -join ','
 $realConvBefore = @(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ','
 
 Section 'agent-chat.js: demo only, no key, no HTML injection, session storage only, tenant routes only'
@@ -39,6 +40,7 @@ Assert (($js -match 'RX_CONV') -and ($js -match 'RX_TOKEN') -and ($js -match 'RX
 Assert (@([regex]::Matches($js, 'textContent')).Count -ge 10) 'server text is placed with textContent'
 Assert (($js -match 'function expired\(\)') -and ($js -match 'r\.status === 403 \|\| r\.status === 404\) \{\s*expired\(\)') -and ($js -match 'clearSession\(\);\s*if \(ui\.log\) ui\.log\.textContent = ""')) 'a 403 or 404 on restore or send clears the saved session and shows the request form again'
 Assert ($js -match 'pending_run_id') 'an unfinished reply is resumed after a reload'
+Assert (($js -match 'forbidden\+\+;\s*if \(forbidden >= 3\) \{ expired\(\); return; \}') -and ($js -match 'forbidden = 0;')) 'while polling, one stray 403 is retried; only a repeated refusal ends the session'
 Assert ($js -match 'TEXT_MAX = 2000') 'the message limit matches the server (2000)'
 
 Section 'agent-chat.js: the new flow (hidden chat, request replaces the form, no ticket picker, recovery)'
@@ -189,7 +191,7 @@ Section 'final checks'
 $demoAfter = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
 Assert ($demoBefore -ceq $demoAfter) 'demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
-Assert (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\tickets') -File -ErrorAction SilentlyContinue).Count -eq 0) 'the real agent-data/tickets received no test ticket'
+Assert ($realTicketsBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\tickets') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length }) -join ',')) 'the real agent-data/tickets received no test ticket'
 Start-Sleep -Milliseconds 500
 try { [System.IO.Directory]::Delete($tmp, $true) } catch { }
 

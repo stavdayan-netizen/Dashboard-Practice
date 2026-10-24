@@ -61,11 +61,16 @@ function Start-AgentRun {
         catch { $err = 'internal_error' }
         finally {
             try {
-                $run = Get-Content -LiteralPath $RunFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                $run = Get-Content -LiteralPath $RunFile -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
                 $out = [ordered]@{ schema = 'run.v1'; run_id = $run.run_id; conversation_id = $run.conversation_id; status = $status; started_at = $run.started_at; finished_at = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz'); reply = $reply; error_code = $err }
-                $tmp = "$RunFile.tmp"
+                # one atomic swap, retried while the page is reading the file, so the poll never finds it missing
+                $tmp = "$RunFile.$([guid]::NewGuid().ToString('N').Substring(0, 8)).tmp"
                 [System.IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $out -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
-                Move-Item -LiteralPath $tmp -Destination $RunFile -Force
+                $swapped = $false
+                for ($i = 0; $i -lt 40 -and -not $swapped; $i++) {
+                    try { [System.IO.File]::Replace($tmp, $RunFile, "$tmp.bak"); [System.IO.File]::Delete("$tmp.bak"); $swapped = $true } catch { Start-Sleep -Milliseconds 25 }
+                }
+                if (-not $swapped) { Move-Item -LiteralPath $tmp -Destination $RunFile -Force }
             } catch { }
             [System.IO.File]::Delete($LockFile)
         }
@@ -85,7 +90,7 @@ function Get-AgentRunStatus {
     # Tenant-safe: status and reply only. The run must belong to the conversation the caller proved access to.
     param([string]$RunId, [string]$ConversationId)
     $path = Get-RunPath $RunId
-    if ($null -eq $path -or -not (Test-Path -LiteralPath $path)) { return (New-Result $false 'run_status' 'tenant' $null 'not_available' 'Not available.') }
+    if ($null -eq $path -or -not (Test-FileThere $path)) { return (New-Result $false 'run_status' 'tenant' $null 'not_available' 'Not available.') }
     $run = Read-JsonFile $path
     if ($run.conversation_id -cne $ConversationId) { return (New-Result $false 'run_status' 'tenant' $null 'not_available' 'Not available.') }
     if ($run.status -ceq 'running') {
