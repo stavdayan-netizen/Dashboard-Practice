@@ -26,9 +26,27 @@ Assert (($r.reply -like '*911*') -and ($r.reply -like '*leave*') -and ($r.reply 
 Assert ((LastMsg $cg2).source -ceq 'failsafe') 'the replacement is stored as a fail-safe message'
 $fs = @(Trace $cg2 | Where-Object { $_.event -ceq 'failsafe_reply' })
 Assert (($fs.Count -eq 1) -and ($fs[0].kinds -contains 'gas')) 'the manager trace says why the reply was replaced'
-Queue @((Resp @((T 'Please leave the area right now and call 911 from outside. Do not go back in until responders say it is safe. Once you are safe, contact your property manager.'))))
+Queue @((Resp @((T 'Please leave the area right now without touching any switches or appliances, and call 911 from outside. Do not go back in until responders say it is safe. Once you are safe, contact your property manager.'))))
 $r = Turn (NewConv 'HV-004') 'There is a strong gas smell.'
 Assert (($r.source -ceq 'model') -and ($r.guards.Count -eq 0)) 'a model reply that already contains safety guidance is kept'
+
+Section 'emergency: a gas reply must also say not to touch or use anything that could spark'
+$liveFirst = 'If you have not already left, please leave now. Stay away from the furnace and kitchen, call 911 from outside, and wait for responders before going back in. Once you are safe, contact the property manager.'
+Assert (@(Test-ReplyMeetsEmergencyBar @('gas') $liveFirst) -contains 'gas') 'leave + 911 without a "do not touch or use anything" instruction does not meet the gas bar'
+Assert (@(Test-ReplyMeetsEmergencyBar @('gas') ($liveFirst + ' Do not touch any switches or use flames.')).Count -eq 0) 'the same reply with the instruction meets the gas bar'
+Assert (@(Test-ReplyMeetsEmergencyBar @('gas') 'Leave now and call 911 from outside. Do not go back in until responders say it is safe.') -contains 'gas') '"do not go back in" alone does not count as the no-spark instruction'
+foreach ($okText in @($SAFE_GAS, (Get-FailSafeReply @('gas') $null), 'Please leave the building first, and don''t operate anything on the way out. Once you are outside, call 911.', 'Get outside and call 911. Never use a lighter, a match or a phone inside.', 'Leave now and call 911. Avoid flames and sparks.')) {
+    Assert (@(Test-ReplyMeetsEmergencyBar @('gas') $okText).Count -eq 0) ('gas bar accepted: ' + (Get-Shortened $okText 60))
+}
+Assert (@(Test-ReplyMeetsEmergencyBar @('smoke_fire') 'Get out now and call 911 from outside.').Count -eq 0) 'the extra no-spark rule applies to gas only (a fire reply with leave + 911 is fine)'
+$cg3 = NewConv 'HV-004'
+Queue @((Resp @((T $liveFirst))))
+$r = Turn $cg3 'I smell gas in the kitchen near the furnace.'
+Assert (($r.source -ceq 'failsafe') -and ($r.guards -contains 'emergency_guard:gas') -and ($r.reply -like '*switches*') -and ($r.reply -like '*911*')) 'a gas reply that leaves out the no-spark instruction is replaced by the fixed safety message'
+
+$liveScript = [System.IO.File]::ReadAllText((Join-Path $root 'agent\Run-LiveTest.ps1'))
+$mi = $liveScript.IndexOf('Manual guidance tool used')
+Assert (($mi -gt 0) -and $liveScript.Substring([Math]::Max(0, $mi - 400), 400).Contains("if (`$Scenario -cne 'gas')")) 'the live-test report does not show the manual-tool line for the gas scenario'
 
 Section 'emergency: API unavailable still gives safety guidance'
 foreach ($case in @(

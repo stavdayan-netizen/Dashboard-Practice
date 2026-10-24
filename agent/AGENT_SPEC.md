@@ -210,7 +210,7 @@ These were set by the owner when Stage 3 was approved. They are test and design 
 **Confirmed by the owner on 2026-10-22**
 
 - Starting models: Haiku first, then Sonnet for comparison.
-- Both deterministic safety nets stay: the fixed hazard-specific fail-safe message when the model path fails, and the replacement of a reply to a clear gas, fire, CO or shock report that lacks basic safety instructions. Every use is logged internally (conversation trace, event `failsafe_reply`, with the reason, the hazard kinds and which guard fired); the tenant never sees the reason.
+- Both deterministic safety nets stay: the fixed hazard-specific fail-safe message when the model path fails, and the replacement of a reply to a clear gas, fire, CO or shock report that lacks basic safety instructions (for gas: leave, 911, and an instruction not to touch or use anything that could spark; added after the first live gas test, which left the last one out). Every use is logged internally (conversation trace, event `failsafe_reply`, with the reason, the hazard kinds and which guard fired); the tenant never sees the reason.
 - Spend limits: $0.25 per run, $1 per day, $5 in total.
 - Effort: `medium` for the first tests, sent explicitly (the Sonnet 5.5 default would otherwise be `high`).
 - Water emerging from electrical equipment is an Emergency; 911 follows danger signs or a credible, imminent threat, not dripping water alone (section 9, item 3).
