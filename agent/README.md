@@ -13,8 +13,11 @@ Documentation and the demo-only AI agent (tools, local storage, Anthropic API cl
 | `agent-loop.ps1` | Memory (facts ledger, validated summaries), the tool-use loop, limits, fail-safe replies, output guards. |
 | `agent-runs.ps1`, `agent-api.ps1` | Background runs and the local `/api/agent/*` routes (loaded by `serve.ps1`). |
 | `Check-AgentSetup.ps1` | Shows what is set up (never prints the key); `-VerifyModels` asks the API, free of charge, whether the model ids exist for your account. |
-| `Run-LiveTest.ps1` | The first controlled live test. Paid. Sends nothing without `-Confirm`. |
-| `tests/` | `Test-AgentTools.ps1` (tools, 185 checks), `Test-AgentLoop.ps1` (loop, mocked, 175), `Test-AgentRoutes.ps1` (runs, routes, HTTP, mocked, 67). |
+| `Run-LiveTest.ps1` | Controlled live tests, scenarios `dishwasher`, `fridge`, `dishwasher-filter` and `gas` (`-FollowUp` adds a second message). Paid. Sends nothing without `-Confirm`; without it, it only prints the plan. The gas scenario uses a temporary open ticket that exists only in a temp copy of the demo data. |
+| `tests/` | `Test-AgentTools.ps1` (tools, 215 checks), `Test-AgentLoop.ps1` (loop, mocked, 216), `Test-AgentRoutes.ps1` (runs, routes, HTTP, mocked, 67): 498, all passing. |
+| `STAGE6_PLAN.md` | The proposed Stage 6 plan (tenant chat, manager view, proposals, approvals). Not approved, not started. |
+
+Stage 5 is complete. Final status, live-test results, safety fixes and remaining limitations: `AGENT_SPEC.md` section 11.
 
 Run all the tests (no key and no API call needed; about a minute):
 
