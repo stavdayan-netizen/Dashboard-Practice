@@ -498,7 +498,6 @@ function Invoke-GetEquipmentInfo($In, [string]$Audience, $Conv) {
         serial_number = $serial
         serial_number_is_fictional = [bool]($serial -and ($serial -clike 'FICT-*'))
         manufacture_year = $rec.manufacture_year; manufacture_year_accuracy = $rec.manufacture_year_accuracy
-        product_warranty = [ordered]@{ description = $rec.product_warranty.description; expires = $rec.product_warranty.expires }
         location = $rec.location; information_status = $rec.information_status; details = $rec.details
         manual = $manualInfo
     }
@@ -508,7 +507,9 @@ function Invoke-GetEquipmentInfo($In, [string]$Audience, $Conv) {
     $core['visibility_label'] = $rec.visibility
     $core['seller'] = $rec.seller; $core['purchase_date'] = $rec.purchase_date
     $core['installation_date'] = $rec.installation_date; $core['installation_company'] = $rec.installation_company
-    $core['installer_contact'] = $rec.installer_contact; $core['workmanship_warranty'] = $rec.workmanship_warranty
+    $core['installer_contact'] = $rec.installer_contact
+    $core['product_warranty'] = [ordered]@{ description = $rec.product_warranty.description; expires = $rec.product_warranty.expires }
+    $core['workmanship_warranty'] = $rec.workmanship_warranty
     $core['notes'] = $rec.notes
     $core['attachment_counts'] = [ordered]@{
         photos = @($rec.attachments.photos).Count; receipts = @($rec.attachments.receipts).Count
@@ -687,6 +688,34 @@ function Invoke-DraftTicketUpdate($In, [string]$Audience, $Conv) {
 
 # ---------------------------------------------------------------- tool dispatcher and definitions
 
+$script:RxWarranty = '(?i)warrant|guarantee'
+
+function Remove-WarrantyInfo($Node) {
+    # Warranty dates, coverage and terms are manager-only. The tools already leave the structured warranty fields out of the
+    # tenant view; this is the second layer for free text: any field name or text value about a warranty or guarantee is dropped
+    # from every tenant tool result, at any depth, whatever record it came from.
+    if ($null -eq $Node -or $Node -is [string] -or $Node -is [ValueType]) { return $Node }
+    if ($Node -is [System.Collections.IDictionary]) {
+        foreach ($k in @($Node.Keys)) {
+            $v = $Node[$k]
+            if ([string]$k -match $script:RxWarranty -or ($v -is [string] -and $v -match $script:RxWarranty)) { $Node.Remove($k); continue }
+            $Node[$k] = Remove-WarrantyInfo $v
+        }
+        return $Node
+    }
+    if ($Node -is [System.Collections.IEnumerable]) {
+        $out = @()
+        foreach ($i in $Node) { if ($i -is [string] -and $i -match $script:RxWarranty) { continue }; $out += , (Remove-WarrantyInfo $i) }
+        return , $out
+    }
+    foreach ($p in @($Node.PSObject.Properties)) {
+        $v = $p.Value
+        if ($p.Name -match $script:RxWarranty -or ($v -is [string] -and $v -match $script:RxWarranty)) { $Node.PSObject.Properties.Remove($p.Name); continue }
+        $p.Value = Remove-WarrantyInfo $v
+    }
+    return $Node
+}
+
 function Invoke-AgentTool {
     param([string]$Name, $ToolInput, [string]$Audience, [string]$ConversationId)
     try {
@@ -717,6 +746,7 @@ function Invoke-AgentTool {
             'get_equipment_manual_guidance' { Invoke-GetEquipmentManualGuidance $ToolInput $Audience $ctx.conv }
             'draft_ticket_update' { Invoke-DraftTicketUpdate $ToolInput $Audience $ctx.conv }
         }
+        if ($Audience -ceq 'tenant' -and $result.ok -and $result.Contains('data')) { $result['data'] = Remove-WarrantyInfo $result['data'] }
         if ($ConversationId) {
             $traceIn = [ordered]@{}
             foreach ($p in $propNames) { $traceIn[$p] = (Get-Prop $ToolInput $p $null) }
@@ -736,7 +766,7 @@ function Get-AgentToolDefinitions {
     return @(
         [ordered]@{ name = 'get_ticket_details'; description = 'Read the current ticket and its context. Tenant calls see only tenant-safe fields.'
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{ ticket_id = $idTk }; additionalProperties = $false } },
-        [ordered]@{ name = 'get_equipment_info'; description = 'Read an equipment record: brand, exact model, warranty, tenant-accessible details and whether a verified manual exists.'
+        [ordered]@{ name = 'get_equipment_info'; description = 'Read an equipment record: brand, exact model, tenant-accessible details and whether a verified manual exists.'
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{ equipment_id = $idEq }; required = @('equipment_id'); additionalProperties = $false } },
         [ordered]@{ name = 'get_maintenance_history'; description = 'Read previous repairs and events for an equipment item, newest first, with a recurring-issue hint.'
             input_schema = [ordered]@{ type = 'object'; properties = [ordered]@{ equipment_id = $idEq; limit = @{ type = 'integer'; minimum = 1; maximum = 20 } }; required = @('equipment_id'); additionalProperties = $false } },

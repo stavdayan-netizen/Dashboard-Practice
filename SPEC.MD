@@ -200,7 +200,7 @@ The future AI Maintenance Agent is **not built, not configured and not connected
 | Tool | Input | Output |
 | --- | --- | --- |
 | `get_ticket_details` | `ticket_id` | Ticket fields, status, priority, Emergency Flag, AI Handling Status, linked equipment ids, tenant-safe notes; or `not_found` |
-| `get_equipment_info` | `equipment_id` | Category, type, brand, exact model, warranty, location, tenant-accessible details, `manual_available`; or `not_found` |
+| `get_equipment_info` | `equipment_id` | Category, type, brand, exact model, location, tenant-accessible details, `manual_available` (warranty details are manager-only and are never returned to a tenant conversation); or `not_found` |
 | `get_maintenance_history` | `equipment_id`, optional `limit` | Previous repairs and recurring issues built from linked tickets, newest first |
 | `get_equipment_manual_guidance` | `equipment_id`, `question` | `matched` true or false; when matched: manufacturer, exact model, document title, official URL, section or page references, tenant-safe checks, professional-only items, warnings. When not matched: a reason (no manual, model mismatch, unverified model) and nothing else |
 | `draft_ticket_update` | `ticket_id` (required, an existing demo ticket), `fields`, `reason`, optional `tenant_confirmed_resolution` | `proposal_id` and status `pending`. Allowed fields are limited to a whitelist (summary, category, emergency flag, AI handling status, **AI urgency** (Routine, Urgent, Emergency), notes, linked equipment); `priority` is refused because the ticket Priority stays the manager's decision (D1); a status of Resolved is accepted only with `tenant_confirmed_resolution` true. The agent never creates tickets |

@@ -86,7 +86,7 @@ The tools are **planned**; none is implemented. All are **read-only except `draf
 
 | Tool | Purpose | Notes |
 | --- | --- | --- |
-| `get_equipment_info` | Retrieve equipment details, model, warranty and tenant-accessible information | Returns only what the requesting audience may see; a tenant conversation never receives cost, vendor or Internal Only fields |
+| `get_equipment_info` | Retrieve equipment details, exact model and tenant-accessible information (warranty details are returned to managers only) | Returns only what the requesting audience may see; a tenant conversation never receives cost, vendor, warranty dates, coverage or terms, or Internal Only fields. A second server-side filter removes any warranty or guarantee text from every tenant tool result, in any field |
 | `get_maintenance_history` | Retrieve relevant previous repairs, recurring issues and maintenance history | Built from linked tickets (the ticket is the source of truth). Tenant conversations get tenant-safe summaries only (no costs, vendors or receipts) |
 | `get_ticket_details` | Retrieve the current ticket and relevant context | Includes status, priority, Emergency Flag and AI Handling Status; Internal Only notes are filtered for tenant conversations |
 | `get_equipment_manual_guidance` | Retrieve relevant instructions from a **verified** manufacturer manual, only when needed (section 3) | Input: equipment id and the specific question. Output: the relevant tenant-safe checks, professional-only warnings, and document and page/section references; or an explicit "no matched manual" result |

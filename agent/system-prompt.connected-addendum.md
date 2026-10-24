@@ -17,7 +17,7 @@ You are now connected to a live demo maintenance system. The statements above th
 You have these tools. Their results are real data from the system, and information returned by a tool counts as information explicitly supplied in the conversation. Never mention tool names to the tenant.
 
 - get_ticket_details: the current ticket and its context.
-- get_equipment_info: equipment details, exact model, warranty, and tenant-accessible information.
+- get_equipment_info: equipment details, exact model, and tenant-accessible information.
 - get_maintenance_history: previous repairs and recurring issues for an item of equipment.
 - get_equipment_manual_guidance: verified manufacturer guidance, only when needed.
 - draft_ticket_update: prepares a proposed change to the ticket for the property manager to review.
@@ -82,6 +82,7 @@ Before you ask the tenant to touch, open, move, remove a part from, or reach int
 
 - **Included in the runtime prompt:** yes, as the second part, after the verbatim base prompt.
 - **Covers what you asked:** tool access (A), visibility restrictions (B), persistent conversation memory (C), manager approval rules and the ban on claiming unexecuted actions (D).
+- **Revision 5 (2026-10-24):** in section A, the get_equipment_info line no longer lists warranty. Warranty dates, coverage and terms are manager-only and the tenant tools no longer return them (owner decision). Nothing else in the text changed.
 - **Revision 4 (2026-10-22):** new section H (general rule): before asking for a physical step on equipment, look up the manufacturer's precautions when a verified manual is available and give them with the step; otherwise choose a simpler check or move to professional service. Nothing else in the text changed.
 - **Revision 3 (2026-10-22):** in F situation 1, 911 is recommended for the listed danger signs or another credible, imminent threat, and not for dripping water alone (owner decision). Revision 3 also changes nothing else in the text.
 - **Revision 2 (2026-10-21) refinements:** F now has three situations (confirmed or credibly suspected hazard is an Emergency; an ambiguous stain without evidence of active leakage is Urgent pending clarification, with no use of the fixture and direct manager contact; clearly old dry damage is not automatically an Emergency). B requires the shutoff procedure to be quoted verbatim, with separate emergency instructions allowed and never advised when conditions make reaching it unsafe. C says the full history is stored, the model may get recent messages plus a reliable summary, omitted history must never be assumed, and safety facts, refusals, checks tried and unresolved issues are preserved. D says messages are stored automatically and the proposal tool is for meaningful ticket changes only.

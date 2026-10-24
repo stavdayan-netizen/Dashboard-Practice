@@ -112,7 +112,7 @@ Section 'equipment info: Internal Only, labels, unauthorized ids'
 $e = Tool 'get_equipment_info' @{ equipment_id = 'eq-hv-dishwasher' } 'tenant' $cDish
 Assert ($e.ok -and $e.data.equipment.brand -ceq 'GE' -and $e.data.equipment.model -ceq 'GDF530PSMSS') 'dishwasher shows the real brand and exact model'
 Assert ($e.data.equipment.manufacture_year_accuracy -ceq 'Estimated') 'estimated manufacture year label is kept'
-foreach ($forbidden in 'seller', 'installer_contact', 'installation_company', 'notes', 'attachments', 'purchase_date', 'workmanship_warranty') {
+foreach ($forbidden in 'seller', 'installer_contact', 'installation_company', 'notes', 'attachments', 'purchase_date', 'workmanship_warranty', 'product_warranty') {
     Assert (-not (HasKey $e.data.equipment $forbidden)) "tenant equipment view hides $forbidden"
 }
 Assert ($e.data.equipment.manual.manual_available -eq $true -and $e.data.equipment.manual.guidance_scope -ceq 'series_or_general') 'manual availability and scope are reported'
@@ -334,6 +334,32 @@ Assert ($got.first_ts -eq $conv.messages[0].ts) 'timestamps survive unchanged'
 $bom = [System.IO.File]::ReadAllBytes((Get-ConversationPath $cD))[0..2]
 Assert (-not ($bom[0] -eq 0xEF -and $bom[1] -eq 0xBB)) 'stored files are UTF-8 without a byte order mark'
 Assert (@(Get-ChildItem -LiteralPath $store -Recurse -File -Filter '*.tmp').Count -eq 0) 'no temporary files are left behind'
+
+Section 'warranty information is manager-only'
+$wTicketEq = @{}
+foreach ($tk in ($script:Demo.Tickets.Keys | Sort-Object)) { foreach ($q in @((Get-TicketExtra $tk).equipment_ids)) { if ($q -and -not $wTicketEq.ContainsKey($q)) { $wTicketEq[$q] = $tk } } }
+$swept = 0; $leaks = @()
+foreach ($eq in ($script:Demo.Equipment.Keys | Sort-Object)) {
+    if (-not (Test-EquipmentTenantVisible $script:Demo.Equipment[$eq])) { continue }
+    $tk = $(if ($wTicketEq.ContainsKey($eq)) { $wTicketEq[$eq] } else { 'HV-010' })
+    $wc = New-Conv $tk $eq
+    foreach ($call in @(@('get_equipment_info', @{ equipment_id = $eq }), @('get_maintenance_history', @{ equipment_id = $eq }), @('get_equipment_manual_guidance', @{ equipment_id = $eq; question = 'is it under warranty and what does it cover' }), @('get_ticket_details', @{}))) {
+        $res = Tool $call[0] $call[1] 'tenant' $wc
+        $swept++
+        if ((ConvertTo-Json -InputObject $res -Depth 12) -match '(?i)warrant|guarantee') { $leaks += "$($call[0]) $eq" }
+    }
+}
+Assert ($swept -ge 40) "swept every tenant-visible equipment record through four tenant tools ($swept calls)"
+Assert ($leaks.Count -eq 0) ('no tenant tool result contains warranty or guarantee text' + $(if ($leaks.Count) { ': ' + ($leaks -join '; ') }))
+$wf = New-Conv 'HV-006' 'eq-hv-fridge'
+$wm = Tool 'get_equipment_info' @{ equipment_id = 'eq-hv-fridge' } 'manager'
+Assert ($wm.ok -and $wm.data.equipment.product_warranty.expires -ceq '2027-03-20' -and (HasKey $wm.data.equipment 'workmanship_warranty')) 'the manager view keeps the product and workmanship warranty'
+$wt = Tool 'get_equipment_info' @{ equipment_id = 'eq-hv-fridge' } 'tenant' $wf
+Assert ($wt.ok -and $wt.data.equipment.model -ceq 'GTS18GTHWW') 'the tenant still gets brand and exact model'
+$sample = [ordered]@{ ok = $true; list = @('Covered by the extended warranty.', 'Plain text'); inner = [pscustomobject]@{ note = 'Lifetime Guarantee'; keep = 'fine'; extended_warranty = 'x' }; details = 'Warranty runs to 2027'; fine = 'Kept' }
+$clean = Remove-WarrantyInfo $sample
+$cj = ConvertTo-Json -InputObject $clean -Depth 8
+Assert (-not ($cj -match '(?i)warrant|guarantee') -and $cj.Contains('Plain text') -and $cj.Contains('fine') -and $cj.Contains('Kept')) 'the free-text filter removes warranty and guarantee text and field names at any depth and keeps the rest'
 
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
