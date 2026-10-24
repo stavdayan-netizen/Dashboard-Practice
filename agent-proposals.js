@@ -215,11 +215,28 @@
     if (note) body.note = note;
     const r = await postJson("/api/agent/manager/proposals/decide", body);
     if (r.status === 200) { await refreshAll(); return; }
-    buttons.forEach((b) => { b.disabled = false; });
-    if (r.status === 409) say(msgBox, "This proposal was already decided. Press Refresh.", "warn");
-    else if (r.status === 400) say(msgBox, "The note could not be saved. Keep it under 500 characters and try again.", "warn");
-    else if (r.status === 0) say(msgBox, "The local demo server is not reachable. Nothing was changed.", "error");
-    else say(msgBox, "The decision could not be saved. Nothing was changed.", "error");
+    if (r.status === 409) { await refreshAll(); notice("This proposal was already decided. Its current state is shown below.", "warn"); return; }
+    if (r.status === 400) {
+      buttons.forEach((b) => { b.disabled = false; });
+      say(msgBox, "The note could not be saved. Keep it under 500 characters and try again.", "warn");
+      return;
+    }
+    // No confirmation from the server (it did not answer, or it failed): the decision may or may not have been saved, so never
+    // claim either. Look at the real state; if the server cannot be reached, say so and leave the buttons for a retry.
+    const fresh = await getJson("/api/agent/manager/proposals" + (filter ? "?status=" + encodeURIComponent(filter) : ""));
+    if (fresh.status === 200) {
+      await refreshAll();
+      notice("The server did not confirm the decision. The list below shows the proposal's current state; decide again only if it is still pending.", "warn");
+    } else {
+      buttons.forEach((b) => { b.disabled = false; });
+      say(msgBox, "The local demo server did not answer, so the decision may not have been saved. Start it and press Refresh to check before deciding again.", "error");
+    }
+  }
+
+  function notice(text, kind) {
+    ui.notice.textContent = text;
+    ui.notice.className = "agent-pp-msg" + (kind ? " agent-pp-msg--" + kind : "");
+    ui.notice.hidden = !text;
   }
 
   async function refreshAll() {
@@ -228,7 +245,7 @@
     await renderPanel(true);
   }
 
-  function applyView(p, row, host) {
+  function applyView(p, row, host, initial) {
     host.textContent = "";
     const { changes, patch } = computeChanges(p, row);
     const work = changes.filter((c) => !c.already && !c.blocked);
@@ -258,13 +275,16 @@
       }
       const r = await postJson("/api/agent/manager/proposals/applied", { proposal_id: p.id });
       if (r.status === 200) { await refreshAll(); return; }
-      say(msg, work.length ? "The ticket was changed in this browser, but the server could not be told. Close this and press Apply again to mark it as applied." : "The server could not mark it as applied. Try again.", "error");
-      go.disabled = false; cancel.disabled = false;
+      if (r.status === 409) { await refreshAll(); notice("The server no longer has this proposal as approved (it may already be marked as applied). Its current state is shown below.", "warn"); return; }
+      // The server did not confirm. The ticket may already have been changed in this browser: show the view again, worked out from the
+      // ticket as it is now, so the changes are not made twice and only the marking is left to do.
+      applyView(p, row, host, { text: work.length ? "The ticket was changed in this browser, but the server did not confirm that the proposal is applied. Press the button to try again; the ticket will not be changed twice." : "The server did not confirm that the proposal is applied. Try again.", kind: "error" });
     });
     const bar = el("div", "agent-pp-actions");
     bar.appendChild(go); bar.appendChild(cancel);
     host.appendChild(bar);
     host.appendChild(msg);
+    if (initial) say(msg, initial.text, initial.kind);
     host.hidden = false;
   }
 
@@ -410,6 +430,10 @@
     bar.appendChild(ui.filter);
     bar.appendChild(ui.refresh);
     box.appendChild(bar);
+    ui.notice = el("div", "agent-pp-msg");
+    ui.notice.setAttribute("role", "status");
+    ui.notice.hidden = true;
+    box.appendChild(ui.notice);
     ui.list = el("div", "agent-pp-list");
     box.appendChild(ui.list);
     ui.overlay.appendChild(box);
@@ -419,8 +443,8 @@
     ui.close.addEventListener("click", closePanel);
     ui.overlay.addEventListener("click", (ev) => { if (ev.target === ui.overlay) closePanel(); });
     document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && panelOpen) { ev.stopPropagation(); closePanel(); } }, true);
-    ui.filter.addEventListener("change", () => { filter = ui.filter.value; renderPanel(true); });
-    ui.refresh.addEventListener("click", () => renderPanel(true));
+    ui.filter.addEventListener("change", () => { filter = ui.filter.value; notice(""); renderPanel(true); });
+    ui.refresh.addEventListener("click", () => { notice(""); renderPanel(true); });
     return true;
   }
 
@@ -478,7 +502,13 @@
 
   async function poll() {
     const r = await getJson("/api/agent/manager/proposals?status=pending");
-    if (!(r.status === 200 && r.data && Array.isArray(r.data.proposals))) return;
+    if (!(r.status === 200 && r.data && Array.isArray(r.data.proposals))) {
+      // never show an old count as if it were current
+      ui.count.textContent = "?"; ui.count.hidden = false;
+      ui.btn.title = "The local demo server is not reachable; the pending count may be out of date.";
+      return;
+    }
+    ui.btn.removeAttribute("title");
     pending = r.data.proposals;
     const n = pending.length;
     const emergencies = pending.filter(isEmergency);

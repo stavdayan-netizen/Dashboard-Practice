@@ -18,7 +18,7 @@ Nothing here adds a cloud backend, a public AI chat, or a production integration
 | Agent store (`agent-data/`) | Conversations and proposals as JSON files | The owner's machine, Git-ignored | Built 2026-10-21 (`agent/agent-lib.ps1`); reached by the local `/api/agent/*` routes (Stage 5) |
 | Anthropic Messages API | The model, with tool use | Anthropic cloud | Client built (Stage 5), mock-tested (498 checks) and live-tested in four controlled scenarios on Haiku 5.5 (about $0.014); key stays on the server (`.env`) |
 | Demo tenant chat (inside `tenant.html?demo=1`) | The tenant's way to talk to the agent | Browser, local only | Built (Stage 6.1: `agent-chat.js`, `agent-chat.css`, loaded only with `?demo=1`) |
-| Manager conversation and approvals (ticket details in `?demo=1`) | The manager reads the full conversation and approves or rejects proposals | Browser, local only | **[planned]** |
+| Manager conversation, proposals and approvals (ticket details and header button in `?demo=1`) | The manager reads the full conversation, reviews proposals against the ticket, approves or rejects, and applies an approved proposal in a separate confirmed step | Browser, local only | Built (Stage 6.2 to 6.4: `agent-manager.js`, `agent-proposals.js`, loaded only in demo mode on localhost; no sign-in, so localhost only) |
 
 ## 2. System architecture
 
@@ -230,5 +230,5 @@ A cloud backend, deploying or enabling the AI chat on GitHub Pages, real authent
 3. Demo equipment refresh with real brands and exact models and the manuals registry, preserving equipment ids and relationships.
 4. Server tools, validation and the JSON store, tested without any API call. **Done 2026-10-21** (`agent/agent-lib.ps1`, `agent/tests/Test-AgentTools.ps1`); the routes in section 3 and 4 are wired in Stage 5.
 5. API key configuration by the owner, then the agent loop with polling and cost limits. **Complete (owner, 2026-10-24)**: implemented 2026-10-21 (`agent/agent-config.ps1`, `agent-loop.ps1`, `agent-runs.ps1`, `agent-api.ps1`), live-tested with `agent/Check-AgentSetup.ps1` and `agent/Run-LiveTest.ps1`. Final status and limitations: `agent/AGENT_SPEC.md` section 11.
-6. Tenant chat in `tenant.html?demo=1`; conversation, proposals and approvals in the ticket details. **Proposed only**: `agent/STAGE6_PLAN.md` (not approved, not started).
-7. Scenario tests (12 emergency, 12 functional), recorded transcripts without secrets, final documentation.
+6. Tenant chat in `tenant.html?demo=1` (a submitted request becomes a local demo ticket, the form is replaced by the chat, the assistant starts); conversation, proposals and approvals for the manager. **Built and tested (Stages 6.0 to 6.5)**: `agent/STAGE6_PLAN.md`. Everything is demo-only and localhost-only; **real authentication and authorization are required before any real-world deployment**.
+7. Scenario tests, recorded transcripts without secrets, final documentation. **Mocked scenarios and transcripts done** (`agent/tests/Test-AgentScenarios.ps1`, `agent/scenarios/`); the live tests are proposed in `agent/FINAL_LIVE_TEST_PLAN.md` and wait for the owner's approval.

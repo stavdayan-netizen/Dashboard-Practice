@@ -249,3 +249,21 @@ HV-901 exists only in a temporary copy of the demo data created by `Run-LiveTest
 - The Anthropic prices in `agent-config.ps1` are a local table; the Console shows the real bill.
 - A local file is written by one process while another reads it (page polling, background runs): writes are atomic swaps with retries and reads retry, covered by concurrency tests; plain files on one machine are still not a database.
 - No approval screen yet (Stage 6, see `agent/STAGE6_PLAN.md`, proposed only).
+
+## 12. Stage 6 final status (built 2026-10-24, awaiting the owner's review of 6.5)
+
+**What exists.** A tenant submits a request in `tenant.html?demo=1` and it becomes a new local demo ticket (never Make, Airtable or `demo/`); the form is replaced by a "Maintenance Support" chat and the assistant starts the conversation about that ticket; a lost session or a failed assistant never loses the ticket (clear messages and a retry). In the demo dashboard the manager sees the new tickets, a read-only AI conversations section in the ticket details, a Proposals button with a count and an emergency banner, a panel that compares every proposed field with the ticket's current value and shows the reply-check warning, and can approve or reject a proposal (no ticket change) and apply an approved one in a separate step that lists every change first. Files: `agent-chat.js/css`, `agent-manager.js/css`, `agent-proposals.js/css`, guarded loaders in `tenant.html` and `index.html`, demo-only hooks in `app.js`, routes `tenant/submit`, `tenant/resume`, `manager/submitted-tickets` in `agent/agent-api.ps1`. Details per phase: `agent/STAGE6_PLAN.md`.
+
+**Server rules added in Stage 6:** a submitted ticket is stored in `agent-data/tickets`; a conversation can be resumed (answer the unanswered tenant message without adding one); the model is told which ticket was just submitted; proposals record `based_on`; files are written atomically with retries (found when a live reply was written while the page polled).
+
+**Tests (all free, mocked):** tools 255, loop 220, routes 86, chat 131, scenarios 37 = **729**, plus browser runs against a mocked server for every phase and the fault-injection runs in `agent/scenarios/FAILURE_TESTS.md`. Transcripts of the twelve mocked scenarios: `agent/scenarios/SCENARIOS.md`.
+
+**Not tested live:** the Stage 6 flow with the real model, the other emergencies, the equipment-specific requests, Sonnet 5.5 and the long-conversation summary path. Proposed in `agent/FINAL_LIVE_TEST_PLAN.md` (five batches, each needing the owner's approval; none has been run).
+
+**Remaining limitations (demo scope):**
+- **No sign-in and no authorization.** Tenant and manager are separated only by route on `localhost` (the manager routes are not a security boundary). **Proper authentication, per-user roles, tenant-to-ticket ownership checks, protected manager routes and audit logging are required before any real-world deployment; the demo must not be exposed beyond localhost or used with real tenants or real data.**
+- Applying a proposal changes the ticket only in the manager's browser (localStorage); it is not shared between browsers or tabs and is lost if site data is cleared. Submitted tickets live only in `agent-data/` and are not in Airtable.
+- The emergency alert is an on-page banner and a count on the dashboard; there is no e-mail, SMS or push alert.
+- Emergency detection, the emergency reply bar and the reply check are keyword based and catch the basic cases, not every wording.
+- Model wording varies from run to run; what is guaranteed is the server-side checks.
+- No attachments or photos in the chat.
