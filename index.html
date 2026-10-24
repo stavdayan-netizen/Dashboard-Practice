@@ -248,5 +248,17 @@
 <script src="receipt-store.js"></script>
 <script src="systems.js"></script>
 <script src="tickets-demo.js"></script>
+<script>
+  // Demo only: the manager's AI conversations section is loaded only in demo mode on the local server (nothing extra is requested otherwise).
+  (function () {
+    if (!/[?&]demo(=|&|$)/.test(location.search) || !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return;
+    var css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "agent-manager.css";
+    document.head.appendChild(css);
+    var js = document.createElement("script");
+    js.src = "agent-manager.js";
+    document.body.appendChild(js);
+  })();
+</script>
 </body>
 </html>

@@ -63,6 +63,25 @@ Assert ($LASTEXITCODE -eq 0) 'tenant.js and tenant.css are unchanged in git'
 Assert ($css.Contains('.demo-hidden') -and $css.Contains('.chat')) 'the chat styles are scoped to .chat and .demo-hidden'
 Assert (-not ($css -match '(?m)^(body|html|main|\.card|\.btn)\b')) 'the chat stylesheet does not restyle the existing portal'
 
+Section 'Stage 6.2 manager view: agent-manager.js and the demo dashboard hooks (read-only, demo and localhost only)'
+$mjs = [System.IO.File]::ReadAllText((Join-Path $root 'agent-manager.js'))
+$mcss = [System.IO.File]::ReadAllText((Join-Path $root 'agent-manager.css'))
+$idx = [System.IO.File]::ReadAllText((Join-Path $root 'index.html'))
+$app = [System.IO.File]::ReadAllText((Join-Path $root 'app.js'))
+Assert (($mjs -match 'if \(!/\[\?&\]demo\(=\|&\|\$\)/\.test\(location\.search\)\) return;') -and ($mjs -match 'if \(!/\^\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)\$/\.test\(location\.hostname\)\) return;')) 'the manager view does nothing without ?demo or off localhost'
+foreach ($bad in 'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'eval(', 'new Function') { Assert (-not $mjs.Contains($bad)) "agent-manager.js does not use $bad" }
+Assert (-not ($mjs -match '(?i)method\s*:|\bPOST\b|\bPUT\b|\bDELETE\b|\bPATCH\b|/proposals|/decide|/applied')) 'the manager view only reads: no request method, no proposal, decision or apply route'
+$mpaths = @([regex]::Matches($mjs, '"(/api/agent/[^"?]*)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+Assert ((@($mpaths | Where-Object { $_ -notmatch '^/api/agent/(status|manager/conversations)$' }).Count -eq 0) -and ($mpaths.Count -eq 2)) ('the manager view uses only the status and conversations routes (' + ($mpaths -join ', ') + ')')
+Assert (($mjs -notmatch '(?i)\.usd|input_tokens|output_tokens|cache_read|cache_write|spend|system_prompt|tenant_token|api[_-]?key|sk-ant|anthropic')) 'costs, token counts, prompts and keys are never read or shown'
+Assert (-not ($mjs -match '(?i)\.input\b|tool_result|\.result\b')) 'tool inputs and results are not shown (only tool names and outcomes)'
+Assert ($mjs.Contains('e.textContent = text') -and $mjs.Contains('createTextNode')) 'server text is placed with textContent and text nodes only'
+Assert (($mjs -notmatch 'localStorage') -and ($mjs -notmatch 'sessionStorage')) 'the manager view stores nothing in the browser'
+Assert (($idx -notmatch '<script[^>]+src="agent-manager\.js"') -and ($idx -match 'agent-manager\.js') -and ($idx -match '\[\?&\]demo\(=\|&\|\$\)') -and ($idx -match '\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)')) 'index.html adds agent-manager.js only in demo mode on localhost (no static script tag)'
+Assert (($app -match 'if \(DEMO_MODE && window\.AgentManagerDemo\) window\.AgentManagerDemo\.decorate\(row, body\);') -and ($app -match 'async function fetchPortalTickets\(\) \{\s*if \(!/\^\(localhost\|127\\\.0\\\.0\\\.1\|\\\[::1\\\]\)\$/\.test\(location\.hostname\)\) return \[\];')) 'the dashboard hooks are demo-only and the portal-ticket request is made only on localhost'
+Assert (($app -match 'fetch\("/api/agent/manager/submitted-tickets"') -and (@([regex]::Matches($app, '/api/agent/')).Count -eq 1)) 'app.js makes exactly one agent request (the list of portal tickets)'
+Assert (-not ($mcss -match '(?m)^(body|html|main|\.card|\.btn|table|tr|td|th)\b') -and ($mcss -notmatch '#[0-9a-fA-F]{3,6}')) 'the manager stylesheet is scoped and uses the dashboard colour variables'
+
 Section 'HTTP through serve.ps1 (test port, temporary store, mocked model): the contract the chat relies on'
 $tmp = Join-Path $env:TEMP ('agent-chat-test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $envdir = Join-Path $tmp 'env'
@@ -120,6 +139,22 @@ try {
         Assert (((@($cv.messages[0].PSObject.Properties.Name)) -join ',') -ceq 'ts,role,text') 'the tenant view shows only time, role and text'
         $x = Http 'GET' "/api/agent/manager/conversations?ticket_id=$($s.ticket_id)"
         Assert (($x.status -eq 200) -and ($x.text -like "*$($s.conversation_id)*") -and ($x.text -like '*submitted_ticket*')) 'the server knows the new ticket (the manager route lists the conversation) and records how the conversation began'
+
+        # Stage 6.2: the manager's side of the same ticket
+        $x = Http 'GET' '/agent-manager.js'
+        Assert (($x.status -eq 200) -and ($x.type -like 'application/javascript*')) 'agent-manager.js is served as JavaScript'
+        $x = Http 'GET' '/agent-manager.css'
+        Assert (($x.status -eq 200) -and ($x.type -like 'text/css*')) 'agent-manager.css is served as CSS'
+        $x = Http 'GET' '/api/agent/manager/submitted-tickets'
+        $stj = $x.text | ConvertFrom-Json
+        $mine = @($stj.tickets | Where-Object { $_.row.id -ceq $s.ticket_id })
+        Assert (($x.status -eq 200) -and ($mine.Count -eq 1) -and ($mine[0].row.issue -ceq $issue) -and ($mine[0].row.status -ceq 'New') -and ($mine[0].details.portal_submitted -eq $true) -and (@($mine[0].details.equipment_ids).Count -eq 1) -and ($mine[0].details.equipment_ids[0] -ceq 'eq-hv-dishwasher')) 'the manager list returns the submitted ticket with a flat equipment list and the portal flag'
+        Assert (($x.text -notlike '*tenant_token*') -and ($x.text -notlike "*$($s.tenant_token)*") -and ($x.text -notlike '*sk-ant*')) 'the manager list never contains a conversation token or a key'
+        $x = Http 'GET' "/api/agent/manager/conversations?ticket_id=$($s.ticket_id)"
+        $mc = $x.text | ConvertFrom-Json
+        $c0 = @($mc.conversations)[0]
+        Assert (($x.status -eq 200) -and (@($mc.conversations).Count -eq 1) -and (@($c0.messages).Count -eq 2) -and ($c0.messages[1].source -ceq 'model') -and ($c0.origin -ceq 'submitted_ticket') -and ($x.text -notlike '*tenant_token*') -and ($x.text -notlike '*sk-ant*')) 'the manager sees the conversation with the message sources and no token or key'
+        Assert ((Http 'GET' '/api/agent/manager/conversations?ticket_id=HV-999').status -eq 404) 'the manager route says not found for a ticket the server does not know'
 
         # validation, origins and limits
         Assert ((Http 'POST' '/api/agent/tenant/submit' @{ issue = 'bad'; priority = 'High' }).status -eq 400) 'a too-short problem description is refused (400)'

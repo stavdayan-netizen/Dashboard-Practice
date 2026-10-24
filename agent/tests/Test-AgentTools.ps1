@@ -496,11 +496,23 @@ $cPlain = (New-Conversation -TicketId $tk1id -Origin 'whatever').data.conversati
 Assert (((Read-Conversation $cOrig).origin -ceq 'submitted_ticket') -and ($null -eq (Read-Conversation $cPlain).origin)) 'only the known origin value is stored on a conversation'
 Assert ((Get-ConversationContextBlock (Read-Conversation $cOrig)).Contains('just submitted this ticket') -and -not (Get-ConversationContextBlock (Read-Conversation $cPlain)).Contains('just submitted')) 'the context block mentions a fresh submission only for such conversations'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are unchanged by submitted tickets'
+# the manager's list for the demo dashboard
+$stl = Get-SubmittedTicketList -Audience 'manager'
+$stlIds = @($stl.data.tickets | ForEach-Object { $_.row.id })
+Assert ($stl.ok -and ($stlIds -contains $tk1id) -and ($stlIds -contains $tk2.data.ticket_id) -and ($stlIds.Count -eq @(Get-ChildItem -LiteralPath $ticketsDir -Filter 'tkt-*.json' -File).Count)) 'the manager list holds every submitted ticket'
+$stl1 = @($stl.data.tickets | Where-Object { $_.row.id -ceq $tk1id })[0]
+$j1 = ConvertTo-Json -InputObject $stl1 -Depth 6 -Compress
+Assert (($j1.Contains('"equipment_ids":["eq-hv-dishwasher"]')) -and ($j1.Contains('"portal_submitted":true')) -and ($j1.Contains('"status":"New"'))) 'a ticket in the manager list has a flat equipment list, the portal flag and its fields'
+Assert ((@($stl1.PSObject.Properties.Name) -join ',') -ceq 'row,details' -or (@($stl1.Keys) -join ',') -ceq 'row,details') 'the list entry holds only the row and its details'
+foreach ($aud in 'tenant', 'server', '') { Assert (-not (Get-SubmittedTicketList -Audience $aud).ok) "the submitted ticket list is refused for audience '$aud'" }
+[System.IO.File]::WriteAllText((Join-Path $ticketsDir 'tkt-HV-888.json'), '{ broken')
+Assert ((Get-SubmittedTicketList -Audience 'manager').ok -and (@((Get-SubmittedTicketList -Audience 'manager').data.tickets).Count -eq $stlIds.Count)) 'a damaged file in the store does not break the manager list'
+[System.IO.File]::Delete((Join-Path $ticketsDir 'tkt-HV-888.json'))
 
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
-$gitChanged = & git -C $root status --porcelain -- app.js index.html tenant.js tenant.css systems.js tickets-demo.js 2>$null
+$gitChanged = & git -C $root status --porcelain -- tenant.js tenant.css systems.js tickets-demo.js 2>$null
 Assert (-not $gitChanged) 'dashboard and tenant portal files have no git changes (demo/ is covered by the byte-hash check)'
 
 if ([System.IO.Directory]::Exists($tmp)) { [System.IO.Directory]::Delete($tmp, $true) }

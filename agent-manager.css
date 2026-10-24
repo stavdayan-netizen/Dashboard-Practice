@@ -1,0 +1,122 @@
+/* AI conversations section in the demo ticket details (demo only). Uses the dashboard's CSS variables. */
+
+.agent-convs {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.agent-convs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-convs-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.agent-muted {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.agent-empty {
+  margin: 8px 0;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.agent-conv {
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.agent-conv > summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.agent-conv-title {
+  font-weight: 600;
+}
+
+.agent-conv-meta {
+  color: var(--color-text-muted);
+}
+
+.agent-log {
+  margin-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.agent-msg {
+  max-width: 94%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.agent-msg--tenant {
+  align-self: flex-end;
+  background: var(--color-accent-light);
+}
+
+.agent-msg--assistant {
+  align-self: flex-start;
+  background: var(--color-card);
+}
+
+.agent-msg-who {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.agent-time {
+  font-weight: 400;
+}
+
+.agent-msg-text {
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+}
+
+.agent-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.agent-badge--failsafe {
+  background: var(--color-urgent-bg);
+  border-color: var(--color-urgent-border);
+  color: var(--color-urgent);
+}
+
+.agent-facts {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  display: grid;
+  gap: 2px;
+}
+
+.agent-note {
+  color: var(--color-high);
+}

@@ -920,6 +920,8 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     // Demo mode adds the emergency flag, AI handling status, notes, linked equipment,
     // attachments, vendor brief and the edit form (see tickets-demo.js).
     if (DEMO_MODE && window.TicketsDemo) window.TicketsDemo.decorate(row, body, titleEl);
+    // Demo mode on the local server also shows the AI conversations for this ticket (see agent-manager.js).
+    if (DEMO_MODE && window.AgentManagerDemo) window.AgentManagerDemo.decorate(row, body);
 
     overlay.hidden = false;
     document.getElementById("dialog-close").focus();
@@ -2508,10 +2510,54 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
     const addressByName = {};
     props.forEach((p) => { addressByName[p.name] = p.full_address || ""; });
     const parsed = Papa.parse(await csvRes.text(), { header: true, skipEmptyLines: true });
-    return parsed.data.map((row) => {
+    demoAddressByName = addressByName;
+    // Requests submitted through the demo tenant portal are kept by the local demo server (never in demo/); add them when it is reachable.
+    const portal = await fetchPortalTickets();
+    portal.forEach((t) => { demoDetails[t.row.id] = t.details || {}; });
+    return parsed.data.concat(portal.map((t) => t.row)).map((row) => {
       const edited = (demoOverrides.tickets[row.id] || {}).fields || {};
       return Object.assign({}, row, edited, { full_address: addressByName[row.property] || "" });
     });
+  }
+
+  let demoAddressByName = {};
+
+  // Tickets submitted through the demo tenant portal (local demo server only: nothing is requested from GitHub Pages or any other host).
+  async function fetchPortalTickets() {
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return [];
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 4000);
+    try {
+      const res = await fetch("/api/agent/manager/submitted-tickets", { signal: ctl.signal, cache: "no-store" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data.tickets) ? data.tickets.filter((t) => t && t.row && typeof t.row.id === "string") : [];
+    } catch (err) {
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Adds portal tickets that are not in the table yet (for example submitted after the dashboard opened). Returns how many were added.
+  async function demoRefreshPortalTickets() {
+    const list = await fetchPortalTickets();
+    let added = 0;
+    list.forEach((t) => {
+      const id = t.row.id;
+      if (state.rows.some((r) => r.id === id)) return;
+      demoDetails[id] = t.details || {};
+      const edited = (demoOverrides.tickets[id] || {}).fields || {};
+      const raw = Object.assign({}, t.row, edited, { full_address: demoAddressByName[t.row.property] || "" });
+      const result = validateRows([raw]);
+      if (result.errors.length || !result.clean.length) return;
+      const row = result.clean[0];
+      row.demo = demoExtrasFor(id);
+      state.rows.push(row);
+      added++;
+    });
+    if (added) renderAll();
+    return added;
   }
 
   // Applies an edit to one demo ticket. The base fields go through the same validation as
@@ -2569,6 +2615,7 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       },
       closeTicket: () => { document.getElementById("dialog-overlay").hidden = true; document.removeEventListener("keydown", onDialogKeydown, true); },
       updateTicket: demoUpdateTicket,
+      refreshPortalTickets: demoRefreshPortalTickets,
       refresh: () => { if (state.rows.length) renderAll(); },
       // Clears the ticket edits, and any hook-registered data (the stored receipt files), then reloads.
       resetTickets: () => {

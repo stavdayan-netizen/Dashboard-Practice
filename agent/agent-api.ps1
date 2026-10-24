@@ -114,6 +114,9 @@ function Invoke-AgentApi {
         if ($Method -ceq 'GET' -and $route -ceq '/api/agent/manager/conversations') {
             return (ConvertTo-ApiReply (Get-ConversationsForTicket -TicketId ([string]$Query['ticket_id']) -Audience 'manager'))
         }
+        if ($Method -ceq 'GET' -and $route -ceq '/api/agent/manager/submitted-tickets') {
+            return (ConvertTo-ApiReply (Get-SubmittedTicketList -Audience 'manager'))
+        }
         if ($Method -ceq 'GET' -and $route -ceq '/api/agent/manager/proposals') {
             $st = [string]$Query['status']
             if ($st -and (@('pending', 'approved', 'rejected', 'applied') -cnotcontains $st)) { return (New-ApiReply 400 @{ error = 'invalid_input'; message = 'Unknown status.' }) }

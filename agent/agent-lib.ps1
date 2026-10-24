@@ -300,6 +300,28 @@ function New-Conversation {
     return (New-Result $true 'new_conversation' 'server' ([ordered]@{ conversation_id = $id; ticket_id = $TicketId; created_at = $now; tenant_token = $token }))
 }
 
+function Get-SubmittedTicketList {
+    # Manager view of the tickets submitted through the demo tenant portal, for the demo dashboard. Read from the agent store
+    # (not from the in-memory copy), so a dashboard opened later or on a restarted server sees all of them.
+    param([string]$Audience)
+    if ($Audience -cne 'manager') { return (New-Result $false 'list_submitted_tickets' $Audience $null 'forbidden' 'Manager only.') }
+    $out = @()
+    $dir = Join-Path $script:Cfg.StoreDir 'tickets'
+    foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter 'tkt-*.json' -File | Sort-Object Name)) {
+        try {
+            $t = Read-JsonFile $f.FullName
+            $id = [string]$t.row.id
+            if ($id -cnotmatch '^HV-\d{3}$' -or [string]$t.row.property -cne $script:Demo.PropertyName) { continue }
+            $ids = Get-List $t.extra 'equipment_ids'
+            $out += [ordered]@{
+                row = $t.row
+                details = [ordered]@{ equipment_ids = $ids; ai_handling_status = [string](Get-Prop $t.extra 'ai_handling_status' 'Not Started'); portal_submitted = $true }
+            }
+        } catch { }
+    }
+    return (New-Result $true 'list_submitted_tickets' 'manager' ([ordered]@{ tickets = @($out) }))
+}
+
 $script:SubmitPriorities = @('Low', 'Medium', 'High', 'Urgent')
 $script:MaxSubmittedTickets = 100
 

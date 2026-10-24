@@ -266,7 +266,7 @@ Section 'final checks'
 $demoAfter = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
 Assert ($demoBefore -ceq $demoAfter) 'demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
-Assert ((& git -C $root status --porcelain -- app.js index.html tenant.js tenant.css systems.js tickets-demo.js 2>$null | Measure-Object).Count -eq 0) 'dashboard and tenant portal code files are unchanged in git (tenant.html carries only the guarded demo loader, checked in Test-AgentChat.ps1; demo/ is covered by the byte-hash check)'
+Assert ((& git -C $root status --porcelain -- tenant.js tenant.css systems.js tickets-demo.js 2>$null | Measure-Object).Count -eq 0) 'dashboard and tenant portal code files are unchanged in git (tenant.html carries only the guarded demo loader, checked in Test-AgentChat.ps1; demo/ is covered by the byte-hash check)'
 Start-Sleep -Milliseconds 500
 if ([System.IO.Directory]::Exists($tmp)) { try { [System.IO.Directory]::Delete($tmp, $true) } catch { } }
 Write-Host ''
