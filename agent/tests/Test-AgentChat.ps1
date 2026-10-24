@@ -1,7 +1,8 @@
 # Stage 6.1 tests: the tenant chat page code (agent-chat.js, agent-chat.css, the guarded loader in tenant.html) and the server contract
-# it relies on (start, restore, expired conversation, wrong token, files served). NO real API call and NO API key: the model is a
-# scripted mock file, the server runs on a test port with a temporary store. The browser behavior (start, restore, mid-run reload,
-# expired session, unreachable server, phone width) was exercised in the in-app browser against the same mocked server.
+# it relies on (submit a request, restore, expired conversation, wrong token, files served). NO real API call and NO API key: the model
+# is a scripted mock file, the server runs on a test port with a temporary store. The browser behavior (submit, hidden chat, switch to
+# the chat, restore, mid-run reload, expired session, unreachable server, phone width) was exercised in the in-app browser against the
+# same kind of mocked server.
 # Run:  powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentChat.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -25,28 +26,41 @@ foreach ($bad in 'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write
 Assert (-not $js.Contains('localStorage')) 'no localStorage (the conversation token is kept in sessionStorage only)'
 Assert ($js.Contains('sessionStorage.setItem(SESSION_KEY') -and $js.Contains('sessionStorage.getItem(SESSION_KEY') -and $js.Contains('sessionStorage.removeItem(SESSION_KEY')) 'the session is saved, read and cleared in sessionStorage'
 Assert (($js -notmatch '(?i)sk-ant|x-api-key|api\.anthropic\.com|ANTHROPIC|anthropic-version') -and ($js -notmatch '(?i)api[_-]?key')) 'no API key, key header or Anthropic address in the browser code'
+Assert (($js -notmatch '(?i)webhook|hook\.eu1\.make\.com|api\.airtable\.com')) 'the chat code never mentions or calls Make or Airtable'
 Assert (-not ($js -match '(?i)manager')) 'the chat code never calls a manager route'
 $paths = @([regex]::Matches($js, '"(/api/agent/[^"?]*)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
-Assert (($paths.Count -ge 4) -and (@($paths | Where-Object { $_ -notmatch '^/api/agent/(status|tenant/(start|message|result|conversation))$' }).Count -eq 0)) ('the only server routes used are status and the four tenant routes (' + ($paths -join ', ') + ')')
+Assert (($paths.Count -ge 6) -and (@($paths | Where-Object { $_ -notmatch '^/api/agent/(status|tenant/(submit|resume|start|message|result|conversation))$' }).Count -eq 0)) ('the only server routes used are status and the tenant routes (' + ($paths -join ', ') + ')')
 $fetches = @([regex]::Matches($js, 'fetch\(([^,)]+)') | ForEach-Object { $_.Groups[1].Value.Trim() } | Select-Object -Unique)
-Assert (($fetches -contains 'path') -and ($fetches -contains '"demo/tickets.csv"') -and ($fetches.Count -eq 2)) 'the only fetch targets are the API helper and the static demo ticket list'
+Assert (($fetches.Count -eq 1) -and ($fetches -contains 'path')) 'the only fetch is the API helper (no other URL is requested)'
 Assert ($js -match 'headers\["X-Conversation-Token"\] = token') 'the token is sent in a header'
 Assert (-not ($js -match '(?i)[?&]token=')) 'the token is never put in a URL'
 Assert (-not ($js -match 'console\.(log|info|debug)')) 'nothing is written to the console'
 Assert (($js -match 'RX_CONV') -and ($js -match 'RX_TOKEN') -and ($js -match 'RX_RUN') -and ($js -match 'RX_TICKET')) 'ids and the token are checked against a strict pattern before use'
 Assert (@([regex]::Matches($js, 'textContent')).Count -ge 10) 'server text is placed with textContent'
-Assert (($js -match 'status === 403 \|\| r\.status === 404\) \{\s*expired\(\)') -and ($js -match 'function expired\(\)') -and ($js -match 'clearSession\(\);\s*ui\.log\.textContent = ""')) 'a 403 or 404 on restore or send clears the saved session and returns to the start screen'
+Assert (($js -match 'function expired\(\)') -and ($js -match 'r\.status === 403 \|\| r\.status === 404\) \{\s*expired\(\)') -and ($js -match 'clearSession\(\);\s*if \(ui\.log\) ui\.log\.textContent = ""')) 'a 403 or 404 on restore or send clears the saved session and shows the request form again'
 Assert ($js -match 'pending_run_id') 'an unfinished reply is resumed after a reload'
 Assert ($js -match 'TEXT_MAX = 2000') 'the message limit matches the server (2000)'
 
-Section 'tenant.html: the portal is unchanged except for one guarded loader'
+Section 'agent-chat.js: the new flow (hidden chat, request replaces the form, no ticket picker, recovery)'
+Assert (($js -match 'section\.hidden = true') -and ($js -match 'if \(ui\.section\) return;') -and ($js -notmatch 'getElementById\("chat-ticket"\)|chat-start|<select')) 'the chat is built hidden and only when first needed; there is no ticket picker'
+Assert ($js -match 'window\.addEventListener\("submit"[\s\S]{0,400}stopImmediatePropagation\(\)[\s\S]{0,300}\}, true\);') 'the submit is intercepted in the capture phase, before the portal handler, so a demo request never goes to Make'
+Assert ($js -match 'if \(mode === "unknown"\)') 'a submit is held while the demo server has not answered yet'
+Assert (($js -match 'mode = "none"') -and ($js -match 'mode === "none"\) return')) 'without a demo server the portal behaves exactly as before'
+Assert ($js -match '"/api/agent/tenant/submit"') 'the request goes to the local submit route'
+Assert (($js -match 'form\.classList\.add\("demo-hidden"\)') -and ($js -match 'form\.classList\.remove\("demo-hidden"\)')) 'the request form is hidden when the chat opens and shown again for another request'
+Assert (($js -match '"Maintenance Support"') -and -not ($js -match 'Ask the AI')) 'the title is the subtle "Maintenance Support"'
+Assert (($js -match 'Try the assistant again') -and ($js -match '/api/agent/tenant/resume') -and ($js -match 'Your request is saved')) 'when the assistant cannot start the saved request is confirmed and a retry is offered'
+Assert (($js -match 'r\.status === 400\) showFormMessage') -and ($js -match 'Your request was not submitted')) 'a failed submit keeps the form and says the request was not submitted'
+Assert ($js -match 'SERVER_DOWN') 'an unreachable server gets a clear message'
+
+Section 'tenant.html and the stylesheet'
 Assert ($html -notmatch '<script[^>]+src="agent-chat\.js"') 'agent-chat.js is not a static script tag (it is only added when ?demo=1)'
 Assert (($html -match 'if \(!/\[\?&\]demo=1\(&\|\$\)/\.test\(location\.search\)\) return;') -and $html.Contains('agent-chat.css') -and $html.Contains('agent-chat.js')) 'the loader returns before requesting anything without ?demo=1'
 Assert ($html.Contains('<script src="tenant.js"></script>') -and $html.Contains('id="request-form"') -and $html.Contains('id="admin-toggle"')) 'the request form, admin toggle and tenant.js are still there'
 Assert (-not ($html -match 'innerHTML|sk-ant|ANTHROPIC')) 'no key or HTML injection in tenant.html'
 & git -C $root diff --quiet HEAD -- tenant.js tenant.css 2>$null
 Assert ($LASTEXITCODE -eq 0) 'tenant.js and tenant.css are unchanged in git'
-Assert ($css.Contains('#agent-chat') -or $css.Contains('.chat')) 'the chat styles are scoped to .chat'
+Assert ($css.Contains('.demo-hidden') -and $css.Contains('.chat')) 'the chat styles are scoped to .chat and .demo-hidden'
 Assert (-not ($css -match '(?m)^(body|html|main|\.card|\.btn)\b')) 'the chat stylesheet does not restyle the existing portal'
 
 Section 'HTTP through serve.ps1 (test port, temporary store, mocked model): the contract the chat relies on'
@@ -68,6 +82,7 @@ function Http([string]$Method, [string]$Path, $Body = $null, [hashtable]$Headers
     try { $r = Invoke-WebRequest @p; return @{ status = [int]$r.StatusCode; text = $r.Content; type = [string]$r.Headers['Content-Type'] } }
     catch { $code = 0; $txt = ''; if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode; try { $sr = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream()); $txt = $sr.ReadToEnd() } catch { } }; return @{ status = $code; text = $txt; type = '' } }
 }
+$issue = 'My dishwasher is not draining and there is water standing in the bottom.'
 try {
     $up = $false
     foreach ($i in 1..40) { Start-Sleep -Milliseconds 500; if ((Http 'GET' '/api/status').status -eq 200) { $up = $true; break } }
@@ -77,45 +92,56 @@ try {
         Assert (($x.status -eq 200) -and ($x.type -like 'application/javascript*') -and ($x.text -like '*dashboardPractice.agentChat.v1*')) 'agent-chat.js is served as JavaScript'
         $x = Http 'GET' '/agent-chat.css'
         Assert (($x.status -eq 200) -and ($x.type -like 'text/css*')) 'agent-chat.css is served as CSS'
-        $x = Http 'GET' '/demo/tickets.csv'
-        Assert (($x.status -eq 200) -and ($x.text -like 'id,date_created,property,tenant,issue,category,priority,status,*') -and ($x.text -like '*HV-010*')) 'the demo ticket list the chat reads is served'
         $x = Http 'GET' '/tenant.html'
         Assert (($x.status -eq 200) -and ($x.text -like '*agent-chat.js*')) 'tenant.html carries the guarded loader'
 
-        # start and restore
-        $x = Http 'POST' '/api/agent/tenant/start' @{ ticket_id = 'HV-010' }
+        # submit a request: a new demo ticket, a conversation about it, and the assistant's first reply
+        $x = Http 'POST' '/api/agent/tenant/submit' @{ issue = $issue; priority = 'High' }
         $s = $x.text | ConvertFrom-Json
-        Assert (($x.status -eq 200) -and ($s.conversation_id -cmatch '^conv-\d{14}-[0-9a-f]{8}$') -and ($s.tenant_token -cmatch '^[A-Za-z0-9_-]{32}$')) 'start returns a conversation id and a 32-character token matching the patterns the chat checks'
+        Assert (($x.status -eq 200) -and ($s.ticket_id -cmatch '^HV-1\d\d$') -and ($s.conversation_id -cmatch '^conv-\d{14}-[0-9a-f]{8}$') -and ($s.tenant_token -cmatch '^[A-Za-z0-9_-]{32}$') -and ($s.run_id -cmatch '^run-\d{14}-[0-9a-f]{8}$') -and ($s.chat_available -eq $true) -and ($null -eq $s.chat_error)) 'submit returns the new ticket, a conversation with a token, a started reply run and no error'
+        Assert (($s.priority -ceq 'High') -and ($s.category -ceq 'Appliance')) 'the ticket keeps the chosen priority and gets a category from the text'
+        $ticketFile = Join-Path (Join-Path $storeDir 'tickets') ("tkt-$($s.ticket_id).json")
+        $tf = $(if (Test-Path -LiteralPath $ticketFile) { [System.IO.File]::ReadAllText($ticketFile) | ConvertFrom-Json } else { $null })
+        Assert (($null -ne $tf) -and ($tf.row.issue -ceq $issue) -and ($tf.row.status -ceq 'New') -and (@($tf.extra.equipment_ids) -contains 'eq-hv-dishwasher')) 'the ticket is stored in the agent store with the issue text, status New and the dishwasher linked'
+        $csvNow = [System.IO.File]::ReadAllText((Join-Path $root 'demo\tickets.csv'))
+        Assert (-not $csvNow.Contains($s.ticket_id)) 'the ticket is not written into demo/tickets.csv'
         $h = @{ 'X-Conversation-Token' = $s.tenant_token }
-        $x = Http 'GET' "/api/agent/tenant/conversation?id=$($s.conversation_id)" $null $h
-        $cv = $x.text | ConvertFrom-Json
-        Assert (($x.status -eq 200) -and (@($cv.messages).Count -eq 0) -and ($x.text -notlike '*tenant_token*')) 'restore with the token returns an empty transcript and never the token'
-        $x = Http 'POST' '/api/agent/tenant/message' @{ conversation_id = $s.conversation_id; text = 'My dishwasher is not draining.' } $h
-        $runId = ($x.text | ConvertFrom-Json).run_id
-        Assert (($x.status -eq 200) -and ($runId -cmatch '^run-\d{14}-[0-9a-f]{8}$')) 'a message returns a run id matching the pattern the chat checks'
         $final = $null; $deadline = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $deadline) {
             Start-Sleep -Milliseconds 500
-            $q = Http 'GET' "/api/agent/tenant/result?run_id=$runId&conversation_id=$($s.conversation_id)" $null $h
+            $q = Http 'GET' "/api/agent/tenant/result?run_id=$($s.run_id)&conversation_id=$($s.conversation_id)" $null $h
             $qj = $q.text | ConvertFrom-Json
             if ($qj.status -cne 'running') { $final = $qj; break }
         }
-        Assert (($null -ne $final) -and ($final.status -ceq 'done') -and ($final.reply -like 'Hi!*')) 'the reply arrives through polling'
+        Assert (($null -ne $final) -and ($final.status -ceq 'done') -and ($final.reply -like 'Hi!*')) 'the assistant starts the conversation: the first reply arrives through polling without the tenant sending anything'
         $x = Http 'GET' "/api/agent/tenant/conversation?id=$($s.conversation_id)" $null $h
         $cv = $x.text | ConvertFrom-Json
-        Assert ((@($cv.messages).Count -eq 2) -and ($cv.messages[0].role -ceq 'tenant') -and ($cv.messages[1].role -ceq 'assistant') -and (((@($cv.messages[0].PSObject.Properties.Name)) -join ',') -ceq 'ts,role,text')) 'a restored conversation has the tenant and assistant messages, with only time, role and text'
+        Assert ((@($cv.messages).Count -eq 2) -and ($cv.messages[0].role -ceq 'tenant') -and ($cv.messages[0].text -ceq $issue) -and ($cv.messages[1].role -ceq 'assistant') -and ($x.text -notlike '*tenant_token*')) 'a restored conversation starts with the submitted request as the tenant message, then the reply, and never shows the token'
+        Assert (((@($cv.messages[0].PSObject.Properties.Name)) -join ',') -ceq 'ts,role,text') 'the tenant view shows only time, role and text'
+        $x = Http 'GET' "/api/agent/manager/conversations?ticket_id=$($s.ticket_id)"
+        Assert (($x.status -eq 200) -and ($x.text -like "*$($s.conversation_id)*") -and ($x.text -like '*submitted_ticket*')) 'the server knows the new ticket (the manager route lists the conversation) and records how the conversation began'
+
+        # validation, origins and limits
+        Assert ((Http 'POST' '/api/agent/tenant/submit' @{ issue = 'bad'; priority = 'High' }).status -eq 400) 'a too-short problem description is refused (400)'
+        Assert ((Http 'POST' '/api/agent/tenant/submit' @{ issue = $issue; priority = 'Critical' }).status -eq 400) 'an unknown priority is refused (400)'
+        Assert ((Http 'POST' '/api/agent/tenant/submit' @{ issue = $issue; priority = 'High' } @{ Origin = 'http://evil.example' }).status -eq 403) 'a submit from a foreign origin is refused (403)'
+        $x = Http 'POST' '/api/agent/tenant/submit' @{ issue = 'I smell gas in the kitchen near the furnace.'; priority = 'Urgent' }
+        $g = $x.text | ConvertFrom-Json
+        Assert (($x.status -eq 200) -and ($g.category -ceq 'HVAC')) 'a gas report becomes a ticket too (the emergency handling is the same as in any conversation)'
 
         # expired or invalid sessions
         Assert ((Http 'GET' "/api/agent/tenant/conversation?id=$($s.conversation_id)" $null @{ 'X-Conversation-Token' = ('A' * 32) }).status -eq 403) 'a wrong token is refused (403)'
         Assert ((Http 'GET' "/api/agent/tenant/conversation?id=$($s.conversation_id)").status -eq 403) 'no token is refused (403)'
         Assert ((Http 'GET' "/api/agent/tenant/conversation?id=conv-20200101000000-00000000" $null $h).status -eq 403) 'an unknown conversation id with a valid-looking token is refused (403)'
         Assert ((Http 'GET' "/api/agent/tenant/result?run_id=run-20200101000000-00000000&conversation_id=$($s.conversation_id)" $null $h).status -eq 404) 'a run that no longer exists is 404 (the chat then re-reads the transcript)'
+        Assert ((Http 'POST' '/api/agent/tenant/resume' @{ conversation_id = $s.conversation_id } @{}).status -eq 403) 'resume without the token is refused (403)'
+        Assert ((Http 'POST' '/api/agent/tenant/resume' @{ conversation_id = $s.conversation_id } $h).status -eq 409) 'resume when the last message already has a reply is refused (409)'
         $conversationFile = Join-Path (Join-Path $storeDir 'conversations') ($s.conversation_id + '.json')
         [System.IO.File]::Delete($conversationFile)
         Assert ((Http 'GET' "/api/agent/tenant/conversation?id=$($s.conversation_id)" $null $h).status -eq 403) 'after the stored conversation is removed, restore is refused (403), which the chat treats as expired'
         Assert ((Http 'POST' '/api/agent/tenant/message' @{ conversation_id = $s.conversation_id; text = 'Hello' } $h).status -eq 403) 'after the stored conversation is removed, sending is refused (403)'
-        Assert ((Http 'POST' '/api/agent/tenant/start' @{ ticket_id = 'HV-010' }).status -eq 200) 'a new conversation can be started after an expired one'
-        Assert ((Http 'POST' '/api/agent/tenant/start' @{ ticket_id = 'HV-999' }).status -eq 404) 'starting on an unknown ticket is refused (404), which the chat shows as "not known"'
+        Assert ((Http 'POST' '/api/agent/tenant/start' @{ ticket_id = $s.ticket_id }).status -eq 200) 'a new conversation can still be started for the saved ticket (the recovery path)'
+        Assert ((Http 'POST' '/api/agent/tenant/start' @{ ticket_id = 'HV-999' }).status -eq 404) 'starting on an unknown ticket is refused (404)'
     }
 }
 finally {
@@ -128,6 +154,7 @@ Section 'final checks'
 $demoAfter = (Get-ChildItem (Join-Path $root 'demo') -Recurse -File | ForEach-Object { (Get-FileHash $_.FullName).Hash }) -join ''
 Assert ($demoBefore -ceq $demoAfter) 'demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
+Assert (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\tickets') -File -ErrorAction SilentlyContinue).Count -eq 0) 'the real agent-data/tickets received no test ticket'
 Start-Sleep -Milliseconds 500
 try { [System.IO.Directory]::Delete($tmp, $true) } catch { }
 

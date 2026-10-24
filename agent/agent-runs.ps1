@@ -21,11 +21,16 @@ function Get-RunPath([string]$RunId) {
 function Get-LockPath([string]$ConversationId) { return (Join-Path (Get-RunsDir) ($ConversationId + '.lock')) }
 
 function Start-AgentRun {
-    param([string]$ConversationId, [string]$Text, [hashtable]$SettingsOverride)
+    param([string]$ConversationId, [string]$Text, [hashtable]$SettingsOverride, [switch]$Resume)
     if (-not (Test-IdFormat $ConversationId $script:RxConv) -or $null -eq (Read-Conversation $ConversationId)) {
         return (New-Result $false 'start_run' 'tenant' $null 'not_available' 'Conversation not available.')
     }
-    if (-not (Test-CleanText $Text $script:MaxTenantText)) {
+    if ($Resume) {
+        $c0 = Read-Conversation $ConversationId
+        $lastMsg = $(if (@($c0.messages).Count -gt 0) { @($c0.messages)[@($c0.messages).Count - 1] } else { $null })
+        if ($null -eq $lastMsg -or $lastMsg.role -cne 'tenant') { return (New-Result $false 'start_run' 'tenant' $null 'invalid_state' 'There is no message waiting for a reply.') }
+    }
+    elseif (-not (Test-CleanText $Text $script:MaxTenantText)) {
         return (New-Result $false 'start_run' 'tenant' $null 'invalid_input' "The message must be 1 to $($script:MaxTenantText) characters without control characters.")
     }
     $S = Get-AgentSettings -Override $SettingsOverride
@@ -41,7 +46,7 @@ function Start-AgentRun {
     Write-JsonFile $runFile ([ordered]@{ schema = 'run.v1'; run_id = $runId; conversation_id = $ConversationId; status = 'running'; started_at = (Get-Stamp); finished_at = $null; reply = $null; error_code = $null })
     foreach ($j in @(Get-Job -ErrorAction SilentlyContinue | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' })) { Remove-Job -Job $j -Force -ErrorAction SilentlyContinue }
     $jobScript = {
-        param($Root, $Store, $Demo, $EnvDir, $ConvId, $Text, $RunFile, $LockFile, $Override)
+        param($Root, $Store, $Demo, $EnvDir, $ConvId, $Text, $RunFile, $LockFile, $Override, $ResumeRun)
         $ErrorActionPreference = 'Stop'
         $reply = $null; $err = $null; $status = 'failed'
         try {
@@ -49,7 +54,8 @@ function Start-AgentRun {
             . (Join-Path $Root 'agent\agent-config.ps1')
             . (Join-Path $Root 'agent\agent-loop.ps1')
             Initialize-AgentLib -ProjectRoot $Root -StoreDir $Store -DemoDir $Demo -EnvDir $EnvDir
-            $res = Invoke-AgentTurn -ConversationId $ConvId -TenantText $Text -SettingsOverride $Override
+            if ($ResumeRun) { $res = Invoke-AgentTurn -ConversationId $ConvId -SettingsOverride $Override -Resume }
+            else { $res = Invoke-AgentTurn -ConversationId $ConvId -TenantText $Text -SettingsOverride $Override }
             if ($res.ok -and $res.reply) { $status = 'done'; $reply = $res.reply; $err = $res.error_code } else { $err = $(if ($res.error_code) { $res.error_code } else { 'run_failed' }) }
         }
         catch { $err = 'internal_error' }
@@ -64,8 +70,9 @@ function Start-AgentRun {
             [System.IO.File]::Delete($LockFile)
         }
     }
+    $resumeFlag = [bool]$Resume
     try {
-        [void](Start-Job -ScriptBlock $jobScript -ArgumentList $script:Cfg.Root, $script:Cfg.StoreDir, $script:Cfg.DemoDir, $script:Cfg.EnvDir, $ConversationId, $Text, $runFile, $lock, $SettingsOverride)
+        [void](Start-Job -ScriptBlock $jobScript -ArgumentList $script:Cfg.Root, $script:Cfg.StoreDir, $script:Cfg.DemoDir, $script:Cfg.EnvDir, $ConversationId, $Text, $runFile, $lock, $SettingsOverride, $resumeFlag)
     }
     catch {
         [System.IO.File]::Delete($lock)

@@ -440,12 +440,22 @@ function Get-ToolResultText($Result) {
 function Invoke-AgentTurn {
     # Adds the tenant's message, runs the model/tool loop within all limits, stores the reply and returns the
     # tenant-safe outcome. Everything else (tool results, summaries, spend) stays server-side.
-    param([string]$ConversationId, [string]$TenantText, [hashtable]$SettingsOverride)
+    # -Resume answers the tenant message that is already the last one in the conversation (the request submitted through the
+    # portal, or a reply that never arrived) instead of adding a new tenant message.
+    param([string]$ConversationId, [string]$TenantText, [hashtable]$SettingsOverride, [switch]$Resume)
     $S = Get-AgentSettings -Override $SettingsOverride
     $run = @{ start = (Get-Date); usd = 0.0; calls = 0; input_tokens = 0; output_tokens = 0 }
     $guards = @()
-    $add = Add-ConversationMessage -ConversationId $ConversationId -Role 'tenant' -Text $TenantText
-    if (-not $add.ok) { return [ordered]@{ ok = $false; error_code = $add.error.code; reply = $null } }
+    if ($Resume) {
+        $c0 = Read-Conversation $ConversationId
+        $last = $(if ($c0 -and @($c0.messages).Count -gt 0) { @($c0.messages)[@($c0.messages).Count - 1] } else { $null })
+        if ($null -eq $last -or $last.role -cne 'tenant') { return [ordered]@{ ok = $false; error_code = 'invalid_state'; reply = $null } }
+        $TenantText = [string]$last.text
+    }
+    else {
+        $add = Add-ConversationMessage -ConversationId $ConversationId -Role 'tenant' -Text $TenantText
+        if (-not $add.ok) { return [ordered]@{ ok = $false; error_code = $add.error.code; reply = $null } }
+    }
     $conv = Read-Conversation $ConversationId
     $kindsNow = @(Find-EmergencyKinds $TenantText)
     $strongNow = @($kindsNow | Where-Object { $_ -ne 'water_electrical' })

@@ -12,6 +12,7 @@
 . (Join-Path $PSScriptRoot 'agent-runs.ps1')
 
 $script:StartLog = New-Object System.Collections.ArrayList
+$script:SubmitLog = New-Object System.Collections.ArrayList
 
 function New-ApiReply([int]$Status, $Body) {
     return @{ status = $Status; json = (ConvertTo-Json -InputObject $Body -Depth 12 -Compress) }
@@ -68,6 +69,38 @@ function Invoke-AgentApi {
             [void]$script:StartLog.Add($now)
             $eq = $(if ($null -ne $body.PSObject.Properties['equipment_id']) { [string]$body.equipment_id } else { $null })
             return (ConvertTo-ApiReply (New-Conversation -TicketId ([string]$body.ticket_id) -EquipmentId $eq))
+        }
+        if ($Method -ceq 'POST' -and $route -ceq '/api/agent/tenant/submit') {
+            # Demo tenant portal: the submitted request becomes a NEW demo ticket in the agent store (never Make, never Airtable,
+            # never demo/), a conversation is opened for it, and the agent's first reply is started. The ticket is kept even if
+            # the conversation or the reply cannot be started; the answer then says what failed so the page can offer a retry.
+            $now = Get-Date
+            foreach ($t in @($script:SubmitLog.ToArray())) { if (($now - $t).TotalSeconds -gt 60) { $script:SubmitLog.Remove($t) } }
+            if ($script:SubmitLog.Count -ge 10) { return (New-ApiReply 429 @{ error = 'limit_exceeded'; message = 'Too many requests were submitted just now. Please wait a minute and try again.' }) }
+            [void]$script:SubmitLog.Add($now)
+            $tk = New-SubmittedTicket -Issue ([string]$body.issue) -Priority ([string]$body.priority)
+            if (-not $tk['ok']) { return (ConvertTo-ApiReply $tk) }
+            $out = [ordered]@{ ticket_id = $tk.data.ticket_id; priority = $tk.data.priority; category = $tk.data.category; conversation_id = $null; tenant_token = $null; run_id = $null; chat_available = $false; chat_error = $null }
+            try {
+                $cv = New-Conversation -TicketId $tk.data.ticket_id -Origin 'submitted_ticket'
+                if (-not $cv['ok']) { $out['chat_error'] = 'conversation_not_started'; return (New-ApiReply 200 $out) }
+                $out['conversation_id'] = $cv.data.conversation_id; $out['tenant_token'] = $cv.data.tenant_token
+                $m = Add-ConversationMessage -ConversationId $cv.data.conversation_id -Role 'tenant' -Text $tk.data.issue
+                if (-not $m['ok']) { $out['chat_error'] = 'message_not_stored'; return (New-ApiReply 200 $out) }
+                $S = Get-AgentSettings
+                $live = [bool]($S.ApiKey -and $S.LiveEnabled -and $S.ModelId)
+                $promptOk = $true; try { [void](Get-SystemPrompt -AllowChange $S.AllowPromptChange) } catch { $promptOk = $false }
+                if (-not ($live -and $promptOk)) { $out['chat_error'] = 'assistant_off'; return (New-ApiReply 200 $out) }
+                $run = Start-AgentRun -ConversationId $cv.data.conversation_id -Resume
+                if ($run['ok']) { $out['run_id'] = $run.data.run_id; $out['chat_available'] = $true } else { $out['chat_error'] = 'reply_not_started' }
+            }
+            catch { $out['chat_error'] = 'chat_failed' }
+            return (New-ApiReply 200 $out)
+        }
+        if ($Method -ceq 'POST' -and $route -ceq '/api/agent/tenant/resume') {
+            # Recovery: answer the tenant message that has no reply yet (for example the first reply never started).
+            if (-not (Test-ConversationToken ([string]$body.conversation_id) $token)) { return (New-ApiReply 403 @{ error = 'forbidden'; message = 'Not allowed.' }) }
+            return (ConvertTo-ApiReply (Start-AgentRun -ConversationId ([string]$body.conversation_id) -Resume))
         }
         if ($route -match '^/api/agent/tenant/(message|result|conversation)$') {
             $conv = $(if ($Method -ceq 'POST') { [string]$body.conversation_id } elseif ($Matches[1] -ceq 'conversation') { [string]$Query['id'] } else { [string]$Query['conversation_id'] })

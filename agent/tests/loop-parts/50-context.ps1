@@ -44,6 +44,23 @@ Assert ($null -eq (Get-ConversationContextBlock $t4)) 'an unknown ticket gives n
 $t5 = $conv0 | ConvertTo-Json -Depth 10 | ConvertFrom-Json; $t5.ticket_id = '../x'
 Assert ($null -eq (Get-ConversationContextBlock $t5)) 'a malformed ticket id gives no context'
 
+# resume: answer the tenant message that is already the last one (the request submitted through the portal)
+$cRe = (New-Conversation -TicketId 'HV-010' -Origin 'submitted_ticket').data.conversation_id
+[void](Add-ConversationMessage -ConversationId $cRe -Role 'tenant' -Text 'My dishwasher is not draining.')
+Queue @((Resp @(T 'Hi! Please run the kitchen sink for 30 seconds. Does it drain?')))
+$r = Invoke-AgentTurn -ConversationId $cRe -SettingsOverride (S @{}) -Resume
+$mRe = @(Msgs $cRe)
+Assert ($r.ok -and $r.source -ceq 'model' -and ($mRe.Count -eq 2) -and ($mRe[0].role -ceq 'tenant') -and ($mRe[1].role -ceq 'assistant')) 'resume stores the reply after the existing tenant message and adds no second tenant message'
+$firstRe = [string]$script:Requests[0].messages[0].content
+Assert ($firstRe.Contains('just submitted this ticket') -and $firstRe.EndsWith('My dishwasher is not draining.') -and (@($script:Requests[0].messages).Count -eq 1)) 'the model input is the context block and the submitted request, nothing else'
+$r = Invoke-AgentTurn -ConversationId $cRe -SettingsOverride (S @{}) -Resume
+Assert ((-not $r.ok) -and $r.error_code -ceq 'invalid_state' -and @(Msgs $cRe).Count -eq 2) 'resume when the last message is the assistant''s changes nothing (invalid_state)'
+$cRe2 = (New-Conversation -TicketId 'HV-004' -Origin 'submitted_ticket').data.conversation_id
+[void](Add-ConversationMessage -ConversationId $cRe2 -Role 'tenant' -Text 'I smell gas in the kitchen near the furnace.')
+Queue @((Resp @(T 'Let''s check the pilot light. Please remove the front panel and relight it.')))
+$r = Invoke-AgentTurn -ConversationId $cRe2 -SettingsOverride (S @{}) -Resume
+Assert (($r.source -ceq 'failsafe') -and ($r.guards -contains 'emergency_guard:gas') -and ($r.reply -like '*911*') -and ($r.reply -notlike '*pilot*')) 'an emergency submitted through the portal gets the same emergency guard: a troubleshooting reply is replaced by the safety message'
+
 # ids typed by a client are validated when the conversation is created, and again when a tool uses them
 Assert (-not (New-Conversation -TicketId 'HV-006' -EquipmentId 'eq-hv-panel').ok) 'a client cannot attach Internal Only equipment'
 Assert (-not (New-Conversation -TicketId 'HV-999' -EquipmentId 'eq-hv-fridge').ok) 'a client cannot open a conversation on an unknown ticket'

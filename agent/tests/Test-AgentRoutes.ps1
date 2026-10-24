@@ -143,6 +143,61 @@ Assert ((Api 'POST' '/api/agent/tenant/message' @{} @{ conversation_id = $conv3;
 $null = Wait-AgentRun -RunId ([string]((Get-ChildItem (Join-Path $store 'runs') -Filter 'run-*.json' | Sort-Object LastWriteTime | Select-Object -Last 1).BaseName)) -ConversationId $conv3 -TimeoutSeconds 60
 Assert (@(Get-Content -LiteralPath (Join-Path $root 'demo\tickets.csv')).Count -eq 31) 'approving a proposal changes no demo ticket (demo/tickets.csv unchanged)'
 
+# ============================================================== demo portal: submit a request, resume, partial failures
+Section 'submit route: a new demo ticket, a conversation and the assistant''s first reply; recovery when the chat cannot start'
+SetMock @((MockResp @(@{ type = 'text'; text = 'Hi! Please check the sink first.' })))
+$issueS = 'The dishwasher is not draining and water stands in the bottom.'
+$sub = Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = $issueS; priority = 'High' }
+$sj = J $sub
+Assert (($sub.status -eq 200) -and ($sj.ticket_id -cmatch '^HV-1\d\d$') -and $sj.conversation_id -and $sj.tenant_token -and $sj.run_id -and ($sj.chat_available -eq $true) -and ($null -eq $sj.chat_error)) 'submit creates the ticket and conversation and starts the first reply'
+Assert ((Get-ChildItem (Join-Path $store 'tickets') -Filter 'tkt-*.json').Count -ge 1) 'the new ticket is stored in the agent store'
+$fs = Wait-AgentRun -RunId $sj.run_id -ConversationId $sj.conversation_id -TimeoutSeconds 90
+Assert ($fs.ok -and $fs.data.status -ceq 'done' -and $fs.data.reply -like 'Hi!*') 'the first reply arrives without a tenant message from the page'
+$msgsS = @((Read-Conversation $sj.conversation_id).messages)
+Assert (($msgsS.Count -eq 2) -and ($msgsS[0].role -ceq 'tenant') -and ($msgsS[0].text -ceq $issueS) -and ($msgsS[1].role -ceq 'assistant')) 'the conversation is the request, then the reply (no duplicate tenant message)'
+$req0 = @(Get-Content "$mockFile.requests.jsonl" | ForEach-Object { $_ | ConvertFrom-Json })[0]
+$first0 = [string]$req0.messages[0].content
+Assert ($first0.Contains($sj.ticket_id) -and $first0.Contains('just submitted this ticket') -and $first0.Contains('eq-hv-dishwasher') -and $first0.EndsWith($issueS)) 'the model is told which ticket was just submitted, which equipment it names, and gets the request text as the tenant message'
+Assert ((Api 'GET' '/api/agent/manager/conversations' @{ ticket_id = $sj.ticket_id }).status -eq 200) 'the server knows the new ticket'
+Assert ((Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = 'no'; priority = 'High' }).status -eq 400) 'a too-short description is 400'
+Assert ((Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = $issueS; priority = 'Whenever' }).status -eq 400) 'an unknown priority is 400'
+Assert ((Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = ('x' * 1001); priority = 'Low' }).status -eq 400) 'a description over 1000 characters is 400'
+
+# resume: only when the last message is the tenant's, only with the token
+$rs0 = Api 'POST' '/api/agent/tenant/resume' @{} @{ conversation_id = $sj.conversation_id } $sj.tenant_token
+Assert ($rs0.status -eq 409) 'resume when the last message already has a reply is 409'
+Assert ((Api 'POST' '/api/agent/tenant/resume' @{} @{ conversation_id = $sj.conversation_id } 'A'.PadRight(32, 'A')).status -eq 403) 'resume with a wrong token is 403'
+$cr = J (Api 'POST' '/api/agent/tenant/start' @{} @{ ticket_id = $sj.ticket_id })
+[void](Add-ConversationMessage -ConversationId $cr.conversation_id -Role 'tenant' -Text $issueS)
+SetMock @((MockResp @(@{ type = 'text'; text = 'Hi again! Is the sink draining?' })))
+$rs1 = Api 'POST' '/api/agent/tenant/resume' @{} @{ conversation_id = $cr.conversation_id } $cr.tenant_token
+Assert (($rs1.status -eq 200) -and (J $rs1).run_id) 'resume answers a tenant message that has no reply yet'
+$rf = Wait-AgentRun -RunId (J $rs1).run_id -ConversationId $cr.conversation_id -TimeoutSeconds 90
+$msgsR = @((Read-Conversation $cr.conversation_id).messages)
+Assert ($rf.ok -and $rf.data.status -ceq 'done' -and ($msgsR.Count -eq 2) -and ($msgsR[0].role -ceq 'tenant') -and ($msgsR[1].role -ceq 'assistant')) 'the resumed reply is stored after the existing tenant message without duplicating it'
+
+# the ticket is kept when the assistant is switched off
+$envFile = Join-Path $envdir '.env'
+$envKeep = [System.IO.File]::ReadAllText($envFile)
+[System.IO.File]::WriteAllText($envFile, "AGENT_LIVE_ENABLED=0`nAGENT_MODEL=haiku`n")
+$off = Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = 'The front door lock is sticking badly.'; priority = 'Medium' }
+[System.IO.File]::WriteAllText($envFile, $envKeep)
+$oj = J $off
+Assert (($off.status -eq 200) -and ($oj.ticket_id -cmatch '^HV-1\d\d$') -and $oj.conversation_id -and ($oj.chat_available -eq $false) -and ($oj.chat_error -ceq 'assistant_off') -and ($null -eq $oj.run_id)) 'with the assistant switched off the ticket and conversation are still created and the answer says so'
+Assert (@((Read-Conversation $oj.conversation_id).messages).Count -eq 1) 'the request is stored as the tenant message even though no reply was started'
+Assert (($off.json -notlike "*$KEY*") -and ($sub.json -notlike "*$KEY*")) 'the submit answers never contain the key'
+
+# a busy conversation refuses a second run
+SetMock @((MockResp @(@{ type = 'text'; text = 'Slow reply.' }) 'end_turn' 3000))
+$bz = J (Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = 'The sliding balcony door will not slide.'; priority = 'Low' })
+$bz2 = Api 'POST' '/api/agent/tenant/resume' @{} @{ conversation_id = $bz.conversation_id } $bz.tenant_token
+Assert ($bz2.status -eq 409) 'a second run on a busy conversation is refused (409)'
+[void](Wait-AgentRun -RunId $bz.run_id -ConversationId $bz.conversation_id -TimeoutSeconds 90)
+
+# rate limit: at most 10 submits a minute (invalid ones count too, so this costs nothing)
+$codes = @(1..12 | ForEach-Object { (Api 'POST' '/api/agent/tenant/submit' @{} @{ issue = 'x'; priority = 'Low' }).status })
+Assert (($codes -contains 429) -and ($codes[0] -eq 400 -or $codes[0] -eq 429)) 'too many submits in a minute are refused (429)'
+
 # ============================================================== real HTTP through serve.ps1
 Section 'HTTP through serve.ps1 (test port, temporary store): existing routes unchanged, agent routes work, background run does not block the server'
 $port = 8561

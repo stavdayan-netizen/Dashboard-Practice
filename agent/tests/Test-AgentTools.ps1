@@ -443,6 +443,60 @@ $clean = Remove-WarrantyInfo $sample
 $cj = ConvertTo-Json -InputObject $clean -Depth 8
 Assert (-not ($cj -match '(?i)warrant|guarantee') -and $cj.Contains('Plain text') -and $cj.Contains('fine') -and $cj.Contains('Kept')) 'the free-text filter removes warranty and guarantee text and field names at any depth and keeps the rest'
 
+Section 'submitted tickets (demo tenant portal): a new demo ticket in the agent store, never in demo/'
+$ticketsDir = Join-Path $store 'tickets'
+$tkBefore = @(Get-ChildItem -LiteralPath $ticketsDir -Filter 'tkt-*.json' -File).Count
+foreach ($bad in @(@('', 'High'), @('abcd', 'High'), @(('x' * 1001), 'High'), @(("bad" + [char]1 + "text here"), 'High'), @('The sink is leaking badly', 'Critical'), @('The sink is leaking badly', ''), @('The sink is leaking badly', 'high'))) {
+    Assert (-not (New-SubmittedTicket -Issue $bad[0] -Priority $bad[1]).ok) "a submitted request is refused: issue '$($bad[0].Substring(0, [Math]::Min(12, $bad[0].Length)).Replace([string][char]1, '?'))' priority '$($bad[1])'"
+}
+Assert (@(Get-ChildItem -LiteralPath $ticketsDir -Filter 'tkt-*.json' -File).Count -eq $tkBefore) 'refused requests leave nothing in the store'
+$tk1 = New-SubmittedTicket -Issue '  The dishwasher is not draining and water stands in the bottom.  ' -Priority 'High'
+Assert ($tk1.ok -and $tk1.data.ticket_id -cmatch '^HV-1\d\d$' -and $tk1.data.category -ceq 'Appliance' -and $tk1.data.priority -ceq 'High') 'a valid request gets an id from HV-101 up, a category from its words and the chosen priority'
+$tk1id = $tk1.data.ticket_id
+$row1 = $script:Demo.Tickets[$tk1id]
+Assert (($row1.status -ceq 'New') -and ($row1.property -ceq '10 Harbor View') -and ($row1.issue -ceq 'The dishwasher is not draining and water stands in the bottom.') -and ($row1.tenant -ceq 'Demo Tenant') -and ($row1.assigned_to -ceq '') -and ($row1.cost -ceq '')) 'the new ticket is New, at 10 Harbor View, trimmed, fictional tenant, no vendor and no cost'
+Assert ((@((Get-TicketExtra $tk1id).equipment_ids) -join ',') -ceq 'eq-hv-dishwasher') 'the equipment the request names (dishwasher) is linked'
+Assert (Test-Path -LiteralPath (Join-Path $ticketsDir "tkt-$tk1id.json")) 'the ticket file is in the agent store'
+$tk2 = New-SubmittedTicket -Issue 'The fridge is warm and the dryer will not start.' -Priority 'Medium'
+Assert ($tk2.ok -and $tk2.data.ticket_id -cne $tk1id -and ((@((Get-TicketExtra $tk2.data.ticket_id).equipment_ids) | Sort-Object) -join ',') -ceq 'eq-hv-dryer,eq-hv-fridge') 'a second request gets a different id and two linked items'
+Assert ((@((Get-TicketExtra (New-SubmittedTicket -Issue 'The breaker panel is buzzing and a light flickers.' -Priority 'Urgent').data.ticket_id).equipment_ids)).Count -eq 0) 'Internal Only equipment (the electrical panel) is never linked'
+Assert ((New-SubmittedTicket -Issue 'The wall paint is peeling in the hallway.' -Priority 'Low').data.category -ceq 'General') 'a request with no matching word is General'
+Assert ((New-SubmittedTicket -Issue 'The kitchen faucet keeps dripping.' -Priority 'Low').data.category -ceq 'Plumbing') 'a faucet request is Plumbing'
+Assert ((New-SubmittedTicket -Issue 'I smell gas in the kitchen near the furnace.' -Priority 'Urgent').data.category -ceq 'HVAC') 'a furnace request is HVAC'
+# the tools and the conversation accept the new ticket
+$cNew = New-Conv $tk1id $null
+$tkTool = Tool 'get_ticket_details' @{} 'tenant' $cNew
+Assert ($tkTool.ok -and $tkTool.data.ticket.id -ceq $tk1id -and $tkTool.data.ticket.priority -ceq 'High' -and @($tkTool.data.ticket.linked_equipment).Count -eq 1 -and -not (HasKey $tkTool.data.ticket 'cost') -and -not (HasKey $tkTool.data.ticket 'assigned_to')) 'a tenant sees the new ticket and its linked equipment, without cost or vendor'
+Assert ((Tool 'get_equipment_info' @{ equipment_id = 'eq-hv-dishwasher' } 'tenant' $cNew).ok) 'the linked equipment is available to the new conversation'
+# it survives a restart (the next process reads the store again)
+$script:Demo.Tickets.Remove($tk1id); $script:Demo.Details.Remove($tk1id)
+Import-DemoData
+Assert ($script:Demo.Tickets.ContainsKey($tk1id) -and ((@((Get-TicketExtra $tk1id).equipment_ids) -join ',') -ceq 'eq-hv-dishwasher')) 'a submitted ticket is read back from the store after a restart'
+Assert ($script:Demo.Tickets.Count -gt 30) 'the demo tickets are still all there next to the submitted ones'
+# a damaged or foreign file in the store is ignored
+[System.IO.File]::WriteAllText((Join-Path $ticketsDir 'tkt-HV-777.json'), '{ not json')
+[System.IO.File]::WriteAllText((Join-Path $ticketsDir 'tkt-HV-666.json'), '{"row":{"id":"../x","property":"10 Harbor View"},"extra":{}}')
+[System.IO.File]::WriteAllText((Join-Path $ticketsDir 'tkt-HV-555.json'), '{"row":{"id":"HV-555","property":"Somewhere Else"},"extra":{}}')
+Import-DemoData
+Assert ((-not $script:Demo.Tickets.ContainsKey('HV-777')) -and (-not $script:Demo.Tickets.ContainsKey('../x')) -and (-not $script:Demo.Tickets.ContainsKey('HV-555'))) 'damaged files, bad ids and tickets of another property are ignored'
+foreach ($n in 'tkt-HV-777.json', 'tkt-HV-666.json', 'tkt-HV-555.json') { [System.IO.File]::Delete((Join-Path $ticketsDir $n)) }
+# a stored id that is not in memory is never reused
+$maxN = @(Get-ChildItem -LiteralPath $ticketsDir -Filter 'tkt-*.json' -File | ForEach-Object { [int](($_.BaseName -replace '^tkt-HV-', '')) } | Sort-Object)[-1]
+$tk3 = New-SubmittedTicket -Issue 'The toilet keeps running after a flush.' -Priority 'Low'
+Assert ([int]($tk3.data.ticket_id -replace '^HV-', '') -eq ($maxN + 1)) 'the next ticket number follows the highest stored one'
+# limit
+$saveMax = $script:MaxSubmittedTickets
+$script:MaxSubmittedTickets = @(Get-ChildItem -LiteralPath $ticketsDir -Filter 'tkt-*.json' -File).Count
+$lim = New-SubmittedTicket -Issue 'One more request that must be refused.' -Priority 'Low'
+$script:MaxSubmittedTickets = $saveMax
+Assert ((-not $lim.ok) -and $lim.error.code -ceq 'limit_exceeded') 'the number of submitted demo tickets is capped'
+# conversation origin
+$cOrig = (New-Conversation -TicketId $tk1id -Origin 'submitted_ticket').data.conversation_id
+$cPlain = (New-Conversation -TicketId $tk1id -Origin 'whatever').data.conversation_id
+Assert (((Read-Conversation $cOrig).origin -ceq 'submitted_ticket') -and ($null -eq (Read-Conversation $cPlain).origin)) 'only the known origin value is stored on a conversation'
+Assert ((Get-ConversationContextBlock (Read-Conversation $cOrig)).Contains('just submitted this ticket') -and -not (Get-ConversationContextBlock (Read-Conversation $cPlain)).Contains('just submitted')) 'the context block mentions a fresh submission only for such conversations'
+Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are unchanged by submitted tickets'
+
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'

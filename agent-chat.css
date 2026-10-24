@@ -5,8 +5,11 @@
 }
 
 .chat-title {
-  margin: 0 0 6px;
-  font-size: 1.1rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
 }
 
 .chat-badge {
@@ -23,8 +26,26 @@
 }
 
 .chat[hidden],
-.chat [hidden] {
+.chat [hidden],
+.demo-hidden {
   display: none !important;
+}
+
+.chat-ticket {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+
+.chat-emergency {
+  margin: 4px 0 0;
+}
+
+.demo-note {
+  margin: 0 0 12px;
+}
+
+.chat-action {
+  margin-left: 4px;
 }
 
 .chat-notice {
@@ -54,7 +75,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .chat-head-title {

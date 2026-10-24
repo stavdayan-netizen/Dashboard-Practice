@@ -1,6 +1,8 @@
-// AI Maintenance Assistant chat for the tenant portal. DEMO ONLY: it exists only on a local server opened with ?demo=1.
-// It talks to the same-origin /api/agent/tenant/* routes of serve.ps1. It never sees the API key, tool results, costs or
-// anything the server does not return to a tenant. All text from the server is shown with textContent (never as HTML).
+// Maintenance Support chat for the tenant portal. DEMO ONLY: it exists only on a local server opened with ?demo=1.
+// Flow: the tenant fills in the request form as usual; in the demo the request is saved as a new DEMO ticket on this machine
+// (never sent to Make or Airtable), the form is replaced by this chat, and the assistant opens the conversation about that ticket.
+// It talks only to the same-origin /api/agent/* routes of serve.ps1. It never sees the API key, tool results, costs or anything
+// the server does not return to a tenant. All text from the server is shown with textContent (never as HTML).
 // The conversation id and its one-time token live in sessionStorage (this tab only), never in a URL or in persistent storage.
 (function () {
   "use strict";
@@ -12,19 +14,25 @@
   const RX_RUN = /^run-\d{14}-[0-9a-f]{8}$/;
   const RX_TOKEN = /^[A-Za-z0-9_-]{32}$/;
   const RX_TICKET = /^(DEMO|HV)-\d{1,3}$/;
-  const DEMO_PROPERTY = "10 Harbor View";
-  const FINISHED = ["resolved", "closed"];
+  const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
+  const ISSUE_MIN = 5;
+  const ISSUE_MAX = 1000;
   const TEXT_MAX = 2000;
   const FETCH_TIMEOUT_MS = 15000;
   const POLL_MS = 1500;
   const POLL_LIMIT_MS = 150000;
   const POLL_NETWORK_RETRIES = 4;
+  const SERVER_DOWN = "Could not reach the local demo server. If it was stopped, start it again and reload this page.";
 
-  let tickets = [];          // [{ id, issue, status }]
-  let session = null;        // { conversation_id, token, ticket_id, pending_run_id }
-  let epoch = 0;             // bumped whenever the conversation changes, so an old poll stops
-  let busy = false;
+  const $ = (id) => document.getElementById(id);
+  const form = $("request-form");
+  const formMessage = $("form-message");
+
+  let mode = "unknown";   // unknown (checking) | local (demo server answered) | none (no demo server: the page works as before)
   let liveReady = true;
+  let session = null;     // { conversation_id, token, ticket_id, pending_run_id, issue }
+  let epoch = 0;          // bumped whenever the conversation changes, so an old poll stops
+  let busy = false;
   const ui = {};
 
   // ---- storage (sessionStorage only; every call is guarded) -------------
@@ -34,14 +42,20 @@
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (!raw) return null;
       const s = JSON.parse(raw);
-      if (!s || !RX_CONV.test(s.conversation_id) || !RX_TOKEN.test(s.token) || !RX_TICKET.test(s.ticket_id)) { clearSession(); return null; }
-      if (s.pending_run_id && !RX_RUN.test(s.pending_run_id)) s.pending_run_id = null;
-      return { conversation_id: s.conversation_id, token: s.token, ticket_id: s.ticket_id, pending_run_id: s.pending_run_id || null };
+      if (!s || !RX_TICKET.test(s.ticket_id)) { clearSession(); return null; }
+      const hasConv = RX_CONV.test(s.conversation_id) && RX_TOKEN.test(s.token);
+      return {
+        conversation_id: hasConv ? s.conversation_id : null,
+        token: hasConv ? s.token : null,
+        ticket_id: s.ticket_id,
+        pending_run_id: (hasConv && RX_RUN.test(s.pending_run_id)) ? s.pending_run_id : null,
+        issue: typeof s.issue === "string" ? s.issue.slice(0, ISSUE_MAX) : ""
+      };
     } catch (err) { return null; }
   }
 
   function saveSession() {
-    try { if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (err) { /* private mode: the chat still works until reload */ }
+    try { if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (err) { /* the chat still works until reload */ }
   }
 
   function clearSession() {
@@ -70,43 +84,7 @@
     }
   }
 
-  // ---- demo tickets (static demo/tickets.csv, 10 Harbor View, not finished) ----
-
-  function parseCsv(text) {
-    const rows = []; let row = []; let cell = ""; let quoted = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (quoted) {
-        if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; } else cell += c;
-      } else if (c === '"') quoted = true;
-      else if (c === ",") { row.push(cell); cell = ""; }
-      else if (c === "\n" || c === "\r") {
-        if (c === "\r" && text[i + 1] === "\n") i++;
-        row.push(cell); cell = "";
-        if (row.length > 1 || row[0] !== "") rows.push(row);
-        row = [];
-      } else cell += c;
-    }
-    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
-    return rows;
-  }
-
-  async function loadTickets() {
-    try {
-      const res = await fetch("demo/tickets.csv", { cache: "no-store" });
-      if (!res.ok) return [];
-      const rows = parseCsv(await res.text());
-      const head = rows.shift() || [];
-      const col = (name) => head.indexOf(name);
-      const iId = col("id"), iProp = col("property"), iIssue = col("issue"), iStatus = col("status");
-      if (iId < 0 || iProp < 0 || iIssue < 0 || iStatus < 0) return [];
-      return rows
-        .filter((r) => r[iProp] === DEMO_PROPERTY && RX_TICKET.test(r[iId]) && FINISHED.indexOf(String(r[iStatus]).toLowerCase()) < 0)
-        .map((r) => ({ id: r[iId], issue: r[iIssue], status: r[iStatus] }));
-    } catch (err) { return []; }
-  }
-
-  // ---- UI ---------------------------------------------------------------
+  // ---- small DOM helpers ------------------------------------------------
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -115,129 +93,11 @@
     return e;
   }
 
-  function buildUi() {
-    const section = el("section", "card chat");
-    section.id = "agent-chat";
-    section.setAttribute("aria-label", "AI Maintenance Assistant (demo)");
-
-    const title = el("h2", "chat-title", "Ask the AI Maintenance Assistant ");
-    title.appendChild(el("span", "chat-badge", "Demo"));
-    section.appendChild(title);
-    section.appendChild(el("p", "hint", "Demo only, with fictional data for 10 Harbor View. In an emergency such as gas, smoke, fire or an electrical shock, leave the area and call 911."));
-
-    ui.notice = el("div", "message chat-notice");
-    ui.notice.setAttribute("role", "status");
-    ui.notice.setAttribute("aria-live", "polite");
-    ui.notice.hidden = true;
-    section.appendChild(ui.notice);
-
-    // start panel
-    ui.start = el("div", "chat-start");
-    const lab = el("label", null, "Which request is this about?");
-    lab.setAttribute("for", "chat-ticket");
-    ui.ticket = el("select");
-    ui.ticket.id = "chat-ticket";
-    ui.startBtn = el("button", "btn btn-primary", "Start conversation");
-    ui.startBtn.type = "button";
-    ui.start.appendChild(lab);
-    ui.start.appendChild(ui.ticket);
-    ui.start.appendChild(ui.startBtn);
-    section.appendChild(ui.start);
-
-    // chat room
-    ui.room = el("div", "chat-room");
-    ui.room.hidden = true;
-    const head = el("div", "chat-head");
-    ui.roomTitle = el("span", "chat-head-title");
-    ui.newBtn = el("button", "btn btn-ghost chat-new", "Start a new conversation");
-    ui.newBtn.type = "button";
-    head.appendChild(ui.roomTitle);
-    head.appendChild(ui.newBtn);
-    ui.log = el("div", "chat-log");
-    ui.log.setAttribute("role", "log");
-    ui.log.setAttribute("aria-live", "polite");
-    ui.log.tabIndex = 0;
-    ui.form = el("form", "chat-form");
-    ui.form.noValidate = true;
-    ui.input = el("textarea");
-    ui.input.rows = 3;
-    ui.input.maxLength = TEXT_MAX;
-    ui.input.placeholder = "Describe the problem or answer the assistant’s question.";
-    ui.input.setAttribute("aria-label", "Your message");
-    ui.count = el("p", "hint hint-right", "0 / " + TEXT_MAX);
-    ui.count.setAttribute("aria-hidden", "true");
-    ui.send = el("button", "btn btn-primary", "Send");
-    ui.send.type = "submit";
-    ui.form.appendChild(ui.input);
-    ui.form.appendChild(ui.count);
-    ui.form.appendChild(ui.send);
-    ui.room.appendChild(head);
-    ui.room.appendChild(ui.log);
-    ui.room.appendChild(ui.form);
-    section.appendChild(ui.room);
-
-    const portal = document.querySelector("main.portal") || document.body;
-    const settings = document.getElementById("settings");
-    if (settings && settings.parentNode === portal) portal.insertBefore(section, settings); else portal.appendChild(section);
-    ui.section = section;
-
-    ui.startBtn.addEventListener("click", startConversation);
-    ui.newBtn.addEventListener("click", newConversation);
-    ui.form.addEventListener("submit", (ev) => { ev.preventDefault(); sendMessage(); });
-    ui.input.addEventListener("input", () => { ui.count.textContent = ui.input.value.length + " / " + TEXT_MAX; });
-    ui.input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); sendMessage(); }
-    });
-  }
-
-  function notice(text, kind) {
-    ui.notice.className = "message chat-notice" + (kind ? " message--" + kind : "");
-    ui.notice.textContent = text || "";
-    ui.notice.hidden = !text;
-  }
-
-  function fillTickets() {
-    ui.ticket.textContent = "";
-    if (tickets.length === 0) {
-      const o = el("option", null, "No open requests available in the demo");
-      o.value = "";
-      ui.ticket.appendChild(o);
-      ui.ticket.disabled = true; ui.startBtn.disabled = true;
-      return;
-    }
-    const first = el("option", null, "Choose a request…");
-    first.value = "";
-    ui.ticket.appendChild(first);
-    tickets.forEach((t) => {
-      const o = el("option", null, t.id + " – " + t.issue + " (" + t.status + ")");
-      o.value = t.id;
-      ui.ticket.appendChild(o);
-    });
-    ui.ticket.disabled = false;
-    ui.startBtn.disabled = !liveReady;
-  }
-
-  function showStart() {
-    epoch++;
-    ui.room.hidden = true;
-    ui.start.hidden = false;
-    fillTickets();
-    setBusy(false);
-  }
-
-  function showRoom() {
-    ui.start.hidden = true;
-    ui.room.hidden = false;
-    ui.roomTitle.textContent = "Request " + session.ticket_id;
-    setBusy(false);
-  }
-
-  function setBusy(on) {
-    busy = on;
-    const off = on || !liveReady;
-    ui.input.disabled = off;
-    ui.send.disabled = off;
-    ui.send.textContent = on ? "Working…" : "Send";
+  function showFormMessage(text, kind) {
+    if (!formMessage) return;
+    formMessage.className = "message" + (kind ? " message--" + kind : "");
+    formMessage.textContent = text || "";
+    formMessage.hidden = !text;
   }
 
   function timeLabel(ts) {
@@ -246,31 +106,132 @@
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  function showEmptyHint() {
-    // a neutral hint written by this page, not an assistant message
-    ui.empty = el("p", "chat-empty", "Type your message below to start. The assistant replies in a few seconds.");
-    ui.log.appendChild(ui.empty);
+  // ---- chat UI (built only when it is first needed; hidden until then) ----
+
+  function buildChat() {
+    if (ui.section) return;
+    const section = el("section", "card chat");
+    section.id = "agent-chat";
+    section.setAttribute("aria-label", "Maintenance Support");
+
+    const head = el("div", "chat-head");
+    const title = el("h2", "chat-title", "Maintenance Support");
+    title.appendChild(el("span", "chat-badge", "Demo"));
+    ui.newBtn = el("button", "btn btn-ghost chat-new", "Submit another request");
+    ui.newBtn.type = "button";
+    head.appendChild(title);
+    head.appendChild(ui.newBtn);
+    section.appendChild(head);
+
+    ui.ticketLine = el("p", "chat-ticket");
+    section.appendChild(ui.ticketLine);
+    section.appendChild(el("p", "hint chat-emergency", "In an emergency such as gas, smoke, fire or an electrical shock, leave the area and call 911."));
+
+    ui.notice = el("div", "message chat-notice");
+    ui.notice.setAttribute("role", "status");
+    ui.notice.setAttribute("aria-live", "polite");
+    ui.notice.hidden = true;
+    section.appendChild(ui.notice);
+
+    ui.log = el("div", "chat-log");
+    ui.log.setAttribute("role", "log");
+    ui.log.setAttribute("aria-live", "polite");
+    ui.log.tabIndex = 0;
+    section.appendChild(ui.log);
+
+    ui.form = el("form", "chat-form");
+    ui.form.noValidate = true;
+    ui.input = el("textarea");
+    ui.input.rows = 3;
+    ui.input.maxLength = TEXT_MAX;
+    ui.input.placeholder = "Type your reply here.";
+    ui.input.setAttribute("aria-label", "Your message");
+    ui.count = el("p", "hint hint-right", "0 / " + TEXT_MAX);
+    ui.count.setAttribute("aria-hidden", "true");
+    ui.send = el("button", "btn btn-primary", "Send");
+    ui.send.type = "submit";
+    ui.form.appendChild(ui.input);
+    ui.form.appendChild(ui.count);
+    ui.form.appendChild(ui.send);
+    section.appendChild(ui.form);
+
+    section.hidden = true;
+    const portal = document.querySelector("main.portal") || document.body;
+    const settings = $("settings");
+    if (settings && settings.parentNode === portal) portal.insertBefore(section, settings); else portal.appendChild(section);
+    ui.section = section;
+
+    ui.newBtn.addEventListener("click", submitAnother);
+    ui.form.addEventListener("submit", (ev) => { ev.preventDefault(); sendMessage(); });
+    ui.input.addEventListener("input", () => { ui.count.textContent = ui.input.value.length + " / " + TEXT_MAX; });
+    ui.input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); sendMessage(); }
+    });
+  }
+
+  function showChat() {
+    buildChat();
+    form.classList.add("demo-hidden");
+    ui.section.hidden = false;
+    ui.ticketLine.textContent = "Request " + session.ticket_id + " was submitted.";
+    setBusy(busy);
+  }
+
+  function showFormAgain() {
+    epoch++;
+    if (ui.section) ui.section.hidden = true;
+    form.classList.remove("demo-hidden");
+    setBusy(false);
+  }
+
+  function notice(text, kind) {
+    if (!ui.notice) return;
+    ui.notice.className = "message chat-notice" + (kind ? " message--" + kind : "");
+    ui.notice.textContent = text || "";
+    ui.notice.hidden = !text;
+  }
+
+  function noticeWithActions(text, kind, actions) {
+    notice(text, kind);
+    actions.forEach((a) => {
+      const b = el("button", "btn btn-secondary chat-action", a.label);
+      b.type = "button";
+      b.addEventListener("click", () => { b.disabled = true; a.run(); });
+      ui.notice.appendChild(document.createTextNode(" "));
+      ui.notice.appendChild(b);
+    });
+  }
+
+  function setBusy(on) {
+    busy = on;
+    if (!ui.input) return;
+    const off = on || !liveReady;
+    ui.input.disabled = off;
+    ui.send.disabled = off;
+    ui.send.textContent = on ? "Working…" : "Send";
   }
 
   function addMessage(role, text, ts) {
-    if (ui.empty && ui.empty.parentNode) ui.empty.parentNode.removeChild(ui.empty);
-    ui.empty = null;
     const wrap = el("div", "chat-msg chat-msg--" + (role === "tenant" ? "tenant" : "assistant"));
-    const who = el("div", "chat-who", role === "tenant" ? "You" : "AI Maintenance Assistant");
+    const who = el("div", "chat-who", role === "tenant" ? "You" : "Maintenance Support");
     const t = timeLabel(ts);
     if (t) who.appendChild(el("span", "chat-time", " · " + t));
-    const body = el("div", "chat-text", String(text));
     wrap.appendChild(who);
-    wrap.appendChild(body);
+    wrap.appendChild(el("div", "chat-text", String(text)));
     ui.log.appendChild(wrap);
     ui.log.scrollTop = ui.log.scrollHeight;
     return wrap;
   }
 
+  function renderTranscript(messages) {
+    ui.log.textContent = "";
+    messages.forEach((m) => addMessage(m.role, m.text, m.ts));
+  }
+
   function showTyping() {
     removeTyping();
     ui.typing = el("div", "chat-msg chat-msg--assistant chat-typing", "Working on a reply…");
-    ui.typing.setAttribute("aria-label", "The assistant is preparing a reply");
+    ui.typing.setAttribute("aria-label", "A reply is being prepared");
     ui.log.appendChild(ui.typing);
     ui.log.scrollTop = ui.log.scrollHeight;
   }
@@ -280,83 +241,147 @@
     ui.typing = null;
   }
 
-  // ---- session lifecycle ------------------------------------------------
+  // ---- submitting the request -------------------------------------------
+
+  function setSubmitting(on) {
+    const btn = $("submit-btn");
+    if (btn) { btn.disabled = on; btn.textContent = on ? "Submitting…" : "Submit request"; }
+  }
+
+  async function submitRequest() {
+    const issueEl = $("issue");
+    const issueErr = $("issue-error");
+    const issue = (issueEl ? issueEl.value : "").trim();
+    if (issueErr) { issueErr.hidden = true; issueErr.textContent = ""; }
+    if (issue.length < ISSUE_MIN || issue.length > ISSUE_MAX || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(issue)) {
+      if (issueErr) { issueErr.textContent = "Please describe the problem in " + ISSUE_MIN + " to " + ISSUE_MAX + " characters."; issueErr.hidden = false; }
+      if (issueEl) issueEl.focus();
+      return;
+    }
+    const checked = form.querySelector('input[name="priority"]:checked');
+    const priority = checked && PRIORITIES.indexOf(checked.value) >= 0 ? checked.value : "Medium";
+    showFormMessage("");
+    setSubmitting(true);
+    const r = await api("POST", "/api/agent/tenant/submit", { issue, priority });
+    setSubmitting(false);
+    const d = r.data;
+    if (r.status === 200 && d && RX_TICKET.test(d.ticket_id)) {
+      const hasConv = RX_CONV.test(d.conversation_id) && RX_TOKEN.test(d.tenant_token);
+      epoch++;
+      session = { conversation_id: hasConv ? d.conversation_id : null, token: hasConv ? d.tenant_token : null, ticket_id: d.ticket_id, pending_run_id: RX_RUN.test(d.run_id) ? d.run_id : null, issue };
+      saveSession();
+      if (issueEl) { issueEl.value = ""; issueEl.dispatchEvent(new Event("input")); }
+      showFormMessage("");
+      buildChat();
+      ui.log.textContent = "";
+      notice("");
+      showChat();
+      addMessage("tenant", issue, new Date().toISOString());
+      if (session.pending_run_id) { setBusy(true); showTyping(); pollRun(session.pending_run_id, epoch); }
+      else chatNotStarted(d.chat_error);
+      return;
+    }
+    if (r.status === 400) showFormMessage("Your request could not be submitted. Please check it and try again.", "error");
+    else if (r.status === 429) showFormMessage("Too many requests were submitted just now. Please wait a minute and try again.", "warning");
+    else if (r.status === 0) showFormMessage("Your request was not submitted. " + SERVER_DOWN, "error");
+    else showFormMessage("Your request was not submitted. Please try again.", "error");
+  }
+
+  // The ticket exists, but the assistant did not start: say so plainly and offer a way forward.
+  function chatNotStarted(reason) {
+    setBusy(false);
+    if (reason === "assistant_off") {
+      notice("Your request is saved. The AI assistant is switched off in this demo, so there will be no automatic reply.", "warning");
+      return;
+    }
+    noticeWithActions("Your request is saved, but the assistant could not start.", "warning", [{ label: "Try the assistant again", run: retryAssistant }]);
+  }
+
+  async function retryAssistant() {
+    if (!session) return;
+    notice("");
+    setBusy(true);
+    const mine = epoch;
+    let r;
+    if (session.conversation_id) {
+      r = await api("POST", "/api/agent/tenant/resume", { conversation_id: session.conversation_id }, session.token);
+    } else {
+      // no conversation was created: open one for the saved ticket and send the request text as the first message
+      const s = await api("POST", "/api/agent/tenant/start", { ticket_id: session.ticket_id });
+      if (!(s.status === 200 && s.data && RX_CONV.test(s.data.conversation_id) && RX_TOKEN.test(s.data.tenant_token))) { retryFailed(s.status); return; }
+      session.conversation_id = s.data.conversation_id; session.token = s.data.tenant_token; saveSession();
+      r = await api("POST", "/api/agent/tenant/message", { conversation_id: session.conversation_id, text: session.issue || "Please help with my request." }, session.token);
+    }
+    if (mine !== epoch) return;
+    if (r.status === 200 && r.data && RX_RUN.test(r.data.run_id)) {
+      session.pending_run_id = r.data.run_id; saveSession();
+      showTyping(); pollRun(r.data.run_id, mine);
+      return;
+    }
+    retryFailed(r.status);
+  }
+
+  function retryFailed(status) {
+    setBusy(false);
+    if (status === 403 || status === 404) { expired(); return; }
+    if (status === 409) { noticeWithActions("A reply is already being prepared. Please wait a few seconds and try again.", "warning", [{ label: "Try again", run: retryAssistant }]); return; }
+    noticeWithActions(status === 0 ? SERVER_DOWN : "The assistant still could not start. Your request is saved.", "error", [{ label: "Try again", run: retryAssistant }]);
+  }
+
+  function submitAnother() {
+    clearSession();
+    if (ui.log) ui.log.textContent = "";
+    notice("");
+    showFormMessage("");
+    showFormAgain();
+    const issueEl = $("issue");
+    if (issueEl) issueEl.focus();
+  }
 
   function expired() {
     // The server no longer accepts this conversation or token (reset, data cleaned, or never valid): forget it safely.
     clearSession();
-    ui.log.textContent = "";
-    showStart();
-    notice("Your earlier conversation is no longer available (it may have expired or been reset). You can start a new one.", "warning");
+    if (ui.log) ui.log.textContent = "";
+    showFormAgain();
+    showFormMessage("Your earlier conversation is no longer available (it may have expired or been reset). You can submit a new request.", "warning");
   }
 
-  async function startConversation() {
-    const id = ui.ticket.value;
-    if (!RX_TICKET.test(id)) { notice("Choose the request this is about first.", "warning"); return; }
-    ui.startBtn.disabled = true;
-    notice("Starting…");
-    const r = await api("POST", "/api/agent/tenant/start", { ticket_id: id });
-    ui.startBtn.disabled = !liveReady;
-    if (r.status === 200 && r.data && RX_CONV.test(r.data.conversation_id) && RX_TOKEN.test(r.data.tenant_token)) {
-      epoch++;
-      session = { conversation_id: r.data.conversation_id, token: r.data.tenant_token, ticket_id: id, pending_run_id: null };
-      saveSession();
-      ui.log.textContent = "";
-      notice("");
-      showRoom();
-      showEmptyHint();
-      ui.input.focus();
-    } else if (r.status === 404) {
-      notice("The demo assistant does not know that request. Please choose another one.", "warning");
-    } else if (r.status === 429) {
-      notice("Too many conversations were started just now. Please wait a minute and try again.", "warning");
-    } else if (r.status === 0) {
-      notice("Could not reach the demo assistant. Check that the local server is running, then try again.", "error");
-    } else {
-      notice("The conversation could not be started. Please try again.", "error");
-    }
-  }
-
-  function newConversation() {
-    clearSession();
-    ui.log.textContent = "";
-    notice("");
-    showStart();
-  }
+  // ---- restoring after a reload -----------------------------------------
 
   async function restore() {
     session = loadSession();
-    if (!session) { showStart(); return; }
-    notice("Restoring your conversation…");
+    if (!session) return;
+    if (!session.conversation_id) {
+      // the ticket was submitted but no conversation exists yet: show the chat with the recovery option
+      buildChat(); showChat(); ui.log.textContent = "";
+      if (session.issue) addMessage("tenant", session.issue, new Date().toISOString());
+      chatNotStarted("conversation_not_started");
+      return;
+    }
+    showFormMessage("Restoring your conversation…");
     const r = await api("GET", "/api/agent/tenant/conversation?id=" + encodeURIComponent(session.conversation_id), undefined, session.token);
+    showFormMessage("");
     if (r.status === 200 && r.data && Array.isArray(r.data.messages)) {
+      buildChat(); showChat();
+      renderTranscript(r.data.messages);
       notice("");
-      showRoom();
-      ui.log.textContent = "";
-      r.data.messages.forEach((m) => addMessage(m.role, m.text, m.ts));
-      if (r.data.messages.length === 0) showEmptyHint();
-      if (session.pending_run_id) {
-        setBusy(true); showTyping();
-        pollRun(session.pending_run_id, epoch);
-      }
+      const msgs = r.data.messages;
+      const lastIsTenant = msgs.length > 0 && msgs[msgs.length - 1].role === "tenant";
+      if (session.pending_run_id) { setBusy(true); showTyping(); pollRun(session.pending_run_id, epoch); }
+      else if (lastIsTenant) { chatNotStarted("reply_not_started"); }
     } else if (r.status === 403 || r.status === 404) {
       expired();
     } else {
-      // the server could not be reached or failed: keep the saved conversation and let the person retry
-      ui.start.hidden = true; ui.room.hidden = true;
-      notice("Could not reach the demo assistant to restore your conversation. Your conversation is kept in this tab.", "error");
-      const retry = el("button", "btn btn-secondary", "Try again");
-      retry.type = "button";
-      retry.addEventListener("click", () => { retry.remove(); restore(); });
-      ui.notice.appendChild(document.createTextNode(" "));
-      ui.notice.appendChild(retry);
+      buildChat(); showChat();
+      ui.log.textContent = "";
+      noticeWithActions(SERVER_DOWN + " Your conversation is kept in this tab.", "error", [{ label: "Try again", run: () => { notice(""); restore(); } }]);
     }
   }
 
   // ---- sending and polling ----------------------------------------------
 
   async function sendMessage() {
-    if (busy || !session || !liveReady) return;
+    if (busy || !session || !session.conversation_id || !liveReady) return;
     const text = ui.input.value.replace(/\s+$/, "");
     if (text.trim().length === 0) return;
     if (text.length > TEXT_MAX) { notice("Please keep the message under " + TEXT_MAX + " characters.", "warning"); return; }
@@ -380,7 +405,7 @@
     if (r.status === 403 || r.status === 404) expired();
     else if (r.status === 409) notice("The previous reply is still being prepared. Please wait a few seconds and try again.", "warning");
     else if (r.status === 400) notice("That message could not be sent. Please check it and try again.", "warning");
-    else if (r.status === 0) notice("Could not reach the demo assistant. Your message was not sent; try again.", "error");
+    else if (r.status === 0) notice("Your message was not sent. " + SERVER_DOWN, "error");
     else notice("The message could not be sent. Please try again.", "error");
   }
 
@@ -393,15 +418,15 @@
       if (mine !== epoch || !session) return;
       if (r.status === 200 && r.data && r.data.status === "running") {
         failures = 0;
-        if (Date.now() - started > POLL_LIMIT_MS) { finishRun(null, "This is taking longer than expected. Your message is saved; wait a moment and send again if needed.", true); return; }
+        if (Date.now() - started > POLL_LIMIT_MS) { finishRun(null, "This is taking longer than expected. Your request is saved; you can try again in a moment.", true); return; }
         setTimeout(tick, POLL_MS); return;
       }
       if (r.status === 200 && r.data && r.data.status === "done" && typeof r.data.reply === "string") { finishRun(r.data.reply); return; }
-      if (r.status === 200 && r.data && r.data.status === "failed") { finishRun(null, String(r.data.message || "A reply could not be prepared. Please try again.")); return; }
+      if (r.status === 200 && r.data && r.data.status === "failed") { runFailed(); return; }
       if (r.status === 403) { expired(); return; }
       if (r.status === 404) { await refreshTranscript(); return; }
       failures++;
-      if (failures > POLL_NETWORK_RETRIES) { finishRun(null, "Lost the connection to the demo assistant. Reload the page to check for the reply.", true); return; }
+      if (failures > POLL_NETWORK_RETRIES) { finishRun(null, "Lost the connection to the demo server. Reload the page to check for the reply.", true); return; }
       setTimeout(tick, POLL_MS * 2);
     };
     setTimeout(tick, 600);
@@ -416,31 +441,55 @@
     if (reply !== null) ui.input.focus();
   }
 
+  function runFailed() {
+    removeTyping();
+    if (session) { session.pending_run_id = null; saveSession(); }
+    setBusy(false);
+    noticeWithActions("A reply could not be prepared. Your request is saved.", "warning", [{ label: "Try again", run: retryAssistant }]);
+  }
+
   async function refreshTranscript() {
     // the run record is gone (for example the store was cleaned): show what the server really has
     removeTyping();
     if (!session) return;
     const r = await api("GET", "/api/agent/tenant/conversation?id=" + encodeURIComponent(session.conversation_id), undefined, session.token);
     if (r.status === 200 && r.data && Array.isArray(r.data.messages)) {
-      ui.log.textContent = "";
-      r.data.messages.forEach((m) => addMessage(m.role, m.text, m.ts));
+      renderTranscript(r.data.messages);
       session.pending_run_id = null; saveSession();
       setBusy(false);
+      const m = r.data.messages;
+      if (m.length > 0 && m[m.length - 1].role === "tenant") chatNotStarted("reply_not_started");
     } else if (r.status === 403 || r.status === 404) expired();
     else finishRun(null, "Could not check for the reply. Reload the page to try again.", true);
   }
 
   // ---- start ------------------------------------------------------------
 
+  // In demo mode a submitted request must never reach Make or Airtable. This runs before the portal's own submit handler.
+  // While the demo server has not answered yet the submit is held; if there is no demo server the portal behaves as before.
+  window.addEventListener("submit", (ev) => {
+    if (ev.target !== form || mode === "none") return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (mode === "unknown") { showFormMessage("Checking the demo assistant. Please try again in a moment.", "warning"); return; }
+    submitRequest();
+  }, true);
+
   async function init() {
     const st = await api("GET", "/api/agent/status", undefined, undefined, 3000);
-    if (st.status !== 200 || !st.data) return; // not the local demo server: show nothing and make no further requests
+    if (st.status !== 200 || !st.data) { mode = "none"; return; } // not the local demo server: show nothing, change nothing
+    mode = "local";
     liveReady = st.data.LiveReady === true && st.data.PromptHashesOk !== false;
-    buildUi();
-    tickets = await loadTickets();
-    if (!liveReady) notice("The AI assistant is switched off in this demo, so it cannot answer right now.", "warning");
+    // demo property is fixed: hide the property picker and say where the request goes
+    const prop = $("property");
+    const field = prop && prop.closest(".field");
+    if (field) {
+      field.classList.add("demo-hidden");
+      const text = "Demo: your request is saved only on this computer and the assistant helps with it. Property: 10 Harbor View."
+        + (liveReady ? "" : " The AI assistant is switched off in this demo, so your request will be saved without an automatic reply.");
+      field.parentNode.insertBefore(el("p", "hint demo-note", text), field);
+    }
     await restore();
-    if (!liveReady) { ui.startBtn.disabled = true; setBusy(false); }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();

@@ -99,10 +99,27 @@ function Initialize-AgentLib {
         DemoDir = [System.IO.Path]::GetFullPath($DemoDir).TrimEnd('\')
         StoreDir = [System.IO.Path]::GetFullPath($StoreDir).TrimEnd('\')
     }
-    foreach ($sub in 'conversations', 'proposals') {
+    foreach ($sub in 'conversations', 'proposals', 'tickets') {
         New-Item -ItemType Directory -Force -Path (Join-Path $script:Cfg.StoreDir $sub) | Out-Null
     }
     Import-DemoData
+}
+
+function Add-SubmittedTicketsFromStore {
+    # Tickets submitted through the demo tenant portal live only in the agent store (agent-data/tickets), never in demo/.
+    # They are added to the in-memory demo data so the tools and routes treat them like any other demo ticket.
+    $dir = Join-Path $script:Cfg.StoreDir 'tickets'
+    if (-not (Test-Path -LiteralPath $dir)) { return }
+    foreach ($f in (Get-ChildItem -LiteralPath $dir -Filter 'tkt-*.json' -File)) {
+        try {
+            $t = Read-JsonFile $f.FullName
+            $id = [string]$t.row.id
+            if ($id -cnotmatch '^HV-\d{3}$' -or $script:Demo.Tickets.ContainsKey($id)) { continue }
+            if ([string]$t.row.property -cne $script:Demo.PropertyName) { continue }
+            $script:Demo.Tickets[$id] = $t.row
+            $script:Demo.Details[$id] = $t.extra
+        } catch { }
+    }
 }
 
 function Import-DemoData {
@@ -122,6 +139,7 @@ function Import-DemoData {
         Tickets = $tickets; Details = $details; Equipment = $equipment; Events = $events; Manuals = $manuals
         PropertyName = (Get-Prop $eqFile 'property' '10 Harbor View')
     }
+    Add-SubmittedTicketsFromStore
 }
 
 function Test-Initialized {
@@ -192,6 +210,7 @@ function Get-ConversationContextBlock($Conv) {
     $lines = @('CONTEXT FROM THE SYSTEM (not written by the tenant). This conversation is about ticket ' + $tid + '.')
     if ($items.Count -gt 0) { $lines += ('Equipment linked to this conversation: ' + ($items -join ', ') + '.') }
     else { $lines += 'No equipment is linked yet; read the ticket first to find which equipment it concerns.' }
+    if ([string](Get-Prop $Conv 'origin' '') -ceq 'submitted_ticket') { $lines += 'The tenant has just submitted this ticket through the portal; their first message is the text of that request, and your reply is the start of the conversation. All of your instructions apply as usual.' }
     $lines += 'Use these ids when you call your tools. The tenant does not know them, so never ask the tenant for a ticket number or equipment id, and never mention the ids.'
     return ($lines -join ' ')
 }
@@ -245,7 +264,7 @@ function Test-ConversationToken([string]$ConversationId, [string]$Token) {
 }
 
 function New-Conversation {
-    param([string]$TicketId, [string]$EquipmentId)
+    param([string]$TicketId, [string]$EquipmentId, [string]$Origin)
     if (-not (Test-Initialized)) { throw 'Library not initialized.' }
     if (-not (Test-IdFormat $TicketId $script:RxTicket) -or -not $script:Demo.Tickets.ContainsKey($TicketId)) {
         return (New-Result $false 'new_conversation' 'server' $null 'not_available' 'That ticket is not available.')
@@ -265,6 +284,7 @@ function New-Conversation {
         id = $id
         ticket_id = $TicketId
         equipment_id = $(if ($EquipmentId) { $EquipmentId } else { $null })
+        origin = $(if ($Origin -ceq 'submitted_ticket') { 'submitted_ticket' } else { $null })
         created_at = $now
         updated_at = $now
         status = 'open'
@@ -278,6 +298,72 @@ function New-Conversation {
     }
     Write-JsonFile (Get-ConversationPath $id) $conv
     return (New-Result $true 'new_conversation' 'server' ([ordered]@{ conversation_id = $id; ticket_id = $TicketId; created_at = $now; tenant_token = $token }))
+}
+
+$script:SubmitPriorities = @('Low', 'Medium', 'High', 'Urgent')
+$script:MaxSubmittedTickets = 100
+
+function Get-SubmittedCategory([string]$Issue) {
+    # Same keyword idea as the tenant portal form (tenant.js); the manager can change it later.
+    $t = $Issue.ToLowerInvariant()
+    $rules = @(
+        @('Appliance', 'dishwasher|washer|washing machine|dryer|refrigerator|fridge|freezer|microwave|\boven\b|\bstove\b|cooktop|\brange\b|disposal'),
+        @('Doors & Locks', '\bdoors?\b|\block(s|ed|ing)?\b|deadbolt|\bkeys?\b|hinge|latch|doorknob|garage door'),
+        @('Electrical', 'electric|outlet|power|breaker|fuse|wiring|spark|\blights?\b|light bulb|switch|smoke (alarm|detector)'),
+        @('HVAC', '\bheat(er|ing)?\b|furnace|boiler|thermostat|\bac\b|a/c|air condition|cooling|\bvents?\b|\bducts?\b|airflow'),
+        @('Plumbing', 'leak|faucet|\bsink\b|toilet|drain|clog|pipe|plumb|shower|bathtub|\btub\b|sewer|flood|burst|water')
+    )
+    foreach ($r in $rules) { if ($t -match $r[1]) { return $r[0] } }
+    return 'General'
+}
+
+function Get-SubmittedEquipmentIds([string]$Issue) {
+    # Links at most two tenant-visible equipment items that the request names, so the agent can use their records and manuals.
+    $t = $Issue.ToLowerInvariant()
+    $map = @(
+        @('eq-hv-dishwasher', 'dishwasher'), @('eq-hv-fridge', 'refrigerator|fridge|freezer'), @('eq-hv-washer', '\bwasher\b|washing machine'),
+        @('eq-hv-dryer', '\bdryer\b'), @('eq-hv-furnace', 'furnace|\bno heat\b|\bheating\b'), @('eq-hv-range', '\brange\b|\bstove\b|\boven\b|cooktop'),
+        @('eq-hv-central-air', 'central air|air condition|\ba/c\b|\bac\b'), @('eq-hv-thermostat', 'thermostat'), @('eq-hv-waterheater', 'water heater|hot water'),
+        @('eq-hv-kitchen-faucet', 'kitchen faucet'), @('eq-hv-toilet', 'toilet'), @('eq-hv-balcony-door', 'balcony door|sliding door'),
+        @('eq-hv-front-door-lock', 'front door|door lock'), @('eq-hv-smoke', 'smoke (detector|alarm)'), @('eq-hv-bathtub', 'bathtub|\btub\b')
+    )
+    $ids = @()
+    foreach ($m in $map) {
+        if ($ids.Count -ge 2) { break }
+        if ($t -match $m[1] -and $script:Demo.Equipment.ContainsKey($m[0]) -and (Test-EquipmentTenantVisible $script:Demo.Equipment[$m[0]]) -and $ids -cnotcontains $m[0]) { $ids += $m[0] }
+    }
+    return @($ids)
+}
+
+function New-SubmittedTicket {
+    # Demo tenant portal: a submitted request becomes a NEW demo ticket in the agent store (not in demo/, not in Airtable, never Make).
+    param([string]$Issue, [string]$Priority)
+    if (-not (Test-Initialized)) { throw 'Library not initialized.' }
+    if (-not (Test-CleanText $Issue 1000) -or $Issue.Trim().Length -lt 5) { return (New-Result $false 'submit_ticket' 'tenant' $null 'invalid_input' 'The problem must be 5 to 1000 characters.') }
+    if ($script:SubmitPriorities -cnotcontains $Priority) { return (New-Result $false 'submit_ticket' 'tenant' $null 'invalid_input' 'Priority must be Low, Medium, High or Urgent.') }
+    $issueText = $Issue.Trim()
+    return (Invoke-StoreLock {
+            $dir = Join-Path $script:Cfg.StoreDir 'tickets'
+            $files = @(Get-ChildItem -LiteralPath $dir -Filter 'tkt-*.json' -File)
+            if ($files.Count -ge $script:MaxSubmittedTickets) { return (New-Result $false 'submit_ticket' 'tenant' $null 'limit_exceeded' 'The demo has reached its limit of submitted requests.') }
+            $used = @{}
+            foreach ($k in $script:Demo.Tickets.Keys) { $used[[string]$k] = $true }
+            foreach ($f in $files) { $used[($f.BaseName -replace '^tkt-', '')] = $true }
+            $n = 101; while ($used.ContainsKey(('HV-{0:D3}' -f $n)) -and $n -le 999) { $n++ }
+            if ($n -gt 999) { return (New-Result $false 'submit_ticket' 'tenant' $null 'limit_exceeded' 'No more demo ticket numbers are available.') }
+            $id = 'HV-{0:D3}' -f $n
+            $category = Get-SubmittedCategory $issueText
+            $row = [pscustomobject][ordered]@{
+                id = $id; date_created = (Get-Date).ToString('yyyy-MM-dd'); property = $script:Demo.PropertyName; tenant = 'Demo Tenant'
+                issue = $issueText; category = $category; priority = $Priority; status = 'New'; assigned_to = ''; date_resolved = ''
+                cost = ''; cost_date = ''; ai_summary = 'Submitted through the demo tenant portal; awaiting triage.'
+            }
+            $extra = [pscustomobject][ordered]@{ equipment_ids = @(Get-SubmittedEquipmentIds $issueText); ai_handling_status = 'Not Started' }
+            Write-JsonFile (Join-Path $dir ("tkt-$id.json")) ([ordered]@{ schema = 'submitted_ticket.v1'; created_at = (Get-Stamp); row = $row; extra = $extra })
+            $script:Demo.Tickets[$id] = $row
+            $script:Demo.Details[$id] = $extra
+            return (New-Result $true 'submit_ticket' 'tenant' ([ordered]@{ ticket_id = $id; priority = $Priority; category = $category; issue = $issueText }))
+        })
 }
 
 function Add-ConversationMessage {
