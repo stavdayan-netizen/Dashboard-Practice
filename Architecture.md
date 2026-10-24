@@ -17,7 +17,7 @@ Nothing here adds a cloud backend, a public AI chat, or a production integration
 | Demo data pack (`demo/`) | Tickets, ticket details, equipment, history, utilities, shutoffs, **[planned]** manuals registry | Static files | Built; manuals planned |
 | Agent store (`agent-data/`) | Conversations and proposals as JSON files | The owner's machine, Git-ignored | Built 2026-10-21 (`agent/agent-lib.ps1`); reached by the local `/api/agent/*` routes (Stage 5) |
 | Anthropic Messages API | The model, with tool use | Anthropic cloud | Client built (Stage 5), mock-tested (498 checks) and live-tested in four controlled scenarios on Haiku 5.5 (about $0.014); key stays on the server (`.env`) |
-| Demo tenant chat (inside `tenant.html?demo=1`) | The tenant's way to talk to the agent | Browser, local only | **[planned]** |
+| Demo tenant chat (inside `tenant.html?demo=1`) | The tenant's way to talk to the agent | Browser, local only | Built (Stage 6.1: `agent-chat.js`, `agent-chat.css`, loaded only with `?demo=1`) |
 | Manager conversation and approvals (ticket details in `?demo=1`) | The manager reads the full conversation and approves or rejects proposals | Browser, local only | **[planned]** |
 
 ## 2. System architecture

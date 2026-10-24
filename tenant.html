@@ -81,5 +81,17 @@
   </main>
 
   <script src="tenant.js"></script>
+  <script>
+    // Demo only: the AI assistant chat is loaded only when the page is opened with ?demo=1 (nothing extra is requested otherwise).
+    (function () {
+      if (!/[?&]demo=1(&|$)/.test(location.search)) return;
+      var css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = "agent-chat.css";
+      document.head.appendChild(css);
+      var js = document.createElement("script");
+      js.src = "agent-chat.js";
+      document.body.appendChild(js);
+    })();
+  </script>
 </body>
 </html>

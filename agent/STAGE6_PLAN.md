@@ -1,6 +1,10 @@
-# Stage 6 plan (PROPOSED, not approved, nothing implemented)
+# Stage 6 plan (APPROVED 2026-10-24; implemented one phase at a time)
 
-Status: written 2026-10-24 after Stage 5 was declared complete. Nothing in this plan exists yet. It needs the owner's approval, and the decisions in section 8, before any code is written. Everything stays demo-only and local: `?demo=1`, `localhost`, 10 Harbor View, fictional data, no cloud backend, no production change.
+Status: **approved by the owner on 2026-10-24 with all six decisions in section 8 accepted, with no manager key for now.** Phase 6.0 (test-data cleanup) is done. **Phase 6.1 (tenant chat) is built and tested, awaiting the owner's review.** Phases 6.2 to 6.5 are not started and need the owner's go-ahead one at a time. Everything stays demo-only and local: `?demo=1`, `localhost`, 10 Harbor View, fictional data, no cloud backend, no production change.
+
+**Security statement (owner decision, 2026-10-24).** There is no manager key and no sign-in in this demo. The manager routes are protected only by the server listening on localhost and checking the `Host` header. **Proper authentication and authorization (a real sign-in, per-user roles, tenant-to-ticket ownership checks, protected manager routes, audit logging) are required before any real-world deployment. This demo must not be exposed beyond localhost or used with real tenants or real data.**
+
+**Phase 6.1 as built:** `agent-chat.js` and `agent-chat.css` (new) plus a guarded loader in `tenant.html` that adds them only when the page is opened with `?demo=1`. Tenants can start a conversation for one of the open 10 Harbor View demo tickets (read from the static `demo/tickets.csv`), send messages with polling, restore the conversation after a reload (including an unfinished reply), start a new conversation, and handle an expired or invalid session safely (the saved session is discarded and the start screen is shown). The conversation id and the one-time token are kept in `sessionStorage` only. An explicit equipment choice at start was left out: the server uses the ticket's linked, tenant-visible equipment automatically. Tests: `agent/tests/Test-AgentChat.ps1` (50 checks, mocked model) plus an in-app browser run against the same mocked server.
 
 ## 1. Goal
 
@@ -80,7 +84,7 @@ Already enforced by the server and not to be rebuilt in the browser: tenant scop
 
 Tests: the existing PowerShell suites must keep passing (498 checks). New server behavior (if any, section 8) gets new PowerShell tests. UI behavior is tested in the in-app browser against the local server with the mocked model, which costs nothing; no Node or Python is available on this machine, so there is no browser test framework. After 6.4, the remaining live scenarios (section 9) run only on the owner's approval, one at a time.
 
-## 8. Decisions needed from the owner
+## 8. Decisions (all six approved by the owner on 2026-10-24; no manager key for now)
 
 1. **Approve the plan and the phase order**, or change it.
 2. **Apply mapping:** confirm that notes are appended (not replaced), `ai_urgency` is shown but not mapped to priority (Emergency sets the Emergency flag), and Resolved needs the tenant's confirmation.

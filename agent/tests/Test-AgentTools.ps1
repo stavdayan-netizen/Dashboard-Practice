@@ -446,7 +446,7 @@ Assert (-not ($cj -match '(?i)warrant|guarantee') -and $cj.Contains('Plain text'
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'
-$gitChanged = & git -C $root status --porcelain -- app.js index.html tenant.html tenant.js systems.js tickets-demo.js 2>$null
+$gitChanged = & git -C $root status --porcelain -- app.js index.html tenant.js tenant.css systems.js tickets-demo.js 2>$null
 Assert (-not $gitChanged) 'dashboard and tenant portal files have no git changes (demo/ is covered by the byte-hash check)'
 
 if ([System.IO.Directory]::Exists($tmp)) { [System.IO.Directory]::Delete($tmp, $true) }
