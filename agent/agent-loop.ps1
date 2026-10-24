@@ -42,6 +42,70 @@ function Get-FailSafeReply($Kinds, [string]$Reason) {
     return 'Sorry, I am having trouble replying right now. Please try again in a few minutes. If this is urgent, please contact your property manager directly.'
 }
 
+$script:RxNoSpark = '(?i)\b(do not|don''t|never|avoid|without|not to)\b[^.!?\n]{0,80}\b(touch|use|operat|switch|flame|spark|light|match|lighter|appliance|electric|anything)'
+
+# Which basic safety instructions a text contains. Used on the final tenant-facing reply (what was delivered) and, with a
+# "given / told / advised" cue, on a proposal's text (what the agent claims was delivered).
+$script:GuidancePatterns = [ordered]@{
+    call_911 = '911'
+    leave = '(?i)\b(leave|leaving|get out|go outside|outside|evacuat\w*|exit)\b'
+    no_spark_or_touch = $script:RxNoSpark
+    stay_away = '(?i)(stay away|keep away|move away|do not touch|don''t touch)'
+    contact_manager = '(?i)property manager'
+}
+$script:RxClaimCue = '(?i)\b(instruct\w*|advis\w*|told|tell|telling|direct\w*|recommend\w*|guidance|provided|given|gave|warn\w*|asked)\b'
+
+function Get-DeliveredGuidance([string]$Reply) {
+    $out = @()
+    foreach ($k in $script:GuidancePatterns.Keys) { if ($Reply -match $script:GuidancePatterns[$k]) { $out += $k } }
+    return @($out)
+}
+
+function Get-ClaimedGuidance([string]$ProposalText) {
+    # Only sentences that say instructions were given count as claims; a plain report of what the tenant said does not.
+    $out = @()
+    foreach ($s in ($ProposalText -split '(?<=[.!?;])\s+|\n')) {
+        if ($s -notmatch $script:RxClaimCue) { continue }
+        foreach ($k in $script:GuidancePatterns.Keys) {
+            $rx = $script:GuidancePatterns[$k]
+            if ($k -ceq 'no_spark_or_touch') { $rx = '(?i)(switch|flame|spark|appliance|ignit|touch)' }
+            if ($k -ceq 'leave') { $rx = '(?i)\b(leave|leaving|leav\w*|evacuat\w*|get out|exit|go outside)\b' }
+            if ($k -ceq 'stay_away') { $rx = '(?i)(stay away|keep away|move away)' }
+            if ($k -ceq 'contact_manager') { $rx = '(?i)(property )?manager' }
+            if ($k -ceq 'call_911') { $rx = '(?i)(911|emergency (services|responders))' }
+            if ($s -match $rx -and $out -cnotcontains $k) { $out += $k }
+        }
+    }
+    return @($out)
+}
+
+function Set-ProposalReplyCheck([string[]]$ProposalIds, [string]$Reply, [string]$Source) {
+    # Adds a server-written record to each pending proposal drafted in this turn: what the tenant-facing reply really said
+    # (the final text, including a fail-safe replacement) next to what the proposal's own text claims was said. It never edits
+    # the agent's proposed fields. Runs after the reply is stored, and a problem here can never change or delay the reply.
+    $delivered = Get-DeliveredGuidance $Reply
+    foreach ($id in @($ProposalIds | Select-Object -Unique)) {
+        $path = Get-ProposalPath $id
+        if ($null -eq $path) { continue }
+        Invoke-StoreLock {
+            if (-not (Test-Path -LiteralPath $path)) { return }
+            $p = Read-JsonFile $path
+            if ($p.status -cne 'pending') { return }
+            $txt = ((@('summary', 'notes') | ForEach-Object { [string](Get-Prop $p.proposed_fields $_ '') }) + [string]$p.reason) -join "`n"
+            $claimed = Get-ClaimedGuidance $txt
+            $missing = @($claimed | Where-Object { $delivered -cnotcontains $_ })
+            $check = [ordered]@{
+                checked_at = (Get-Stamp); reply_source = $Source
+                delivered_in_reply = @($delivered); claimed_in_proposal = @($claimed); claimed_but_not_delivered = @($missing)
+                note = $(if ($missing.Count) { 'The proposal text says these instructions were given, but the tenant reply did not contain them: ' + ($missing -join ', ') + '. Trust delivered_in_reply and the transcript.' } else { 'No claim in the proposal text goes beyond what the tenant reply said.' })
+            }
+            $p | Add-Member -NotePropertyName reply_check -NotePropertyValue $check -Force
+            $p.history = @($p.history) + @([ordered]@{ ts = (Get-Stamp); event = 'reply_check'; by = 'server'; claimed_but_not_delivered = @($missing) })
+            Write-JsonFile $path $p
+        } | Out-Null
+    }
+}
+
 function Test-ReplyMeetsEmergencyBar($Kinds, [string]$Reply) {
     # Returns the kinds whose basic safety instructions are missing from the reply (empty = fine).
     $missing = @()
@@ -50,7 +114,7 @@ function Test-ReplyMeetsEmergencyBar($Kinds, [string]$Reply) {
     $leave = ($r -match '(?i)\b(leave|get out|go outside|outside|evacuate|fresh air)\b')
     $away = ($r -match '(?i)(stay away|keep away|do not touch|don''t touch|avoid (the|that|it)|move away)')
     # a gas reply must also say not to touch or use anything that could spark (switches, appliances, flames, lighters, phones are not required)
-    $noSpark = ($r -match '(?i)\b(do not|don''t|never|avoid|without|not to)\b[^.!?\n]{0,80}\b(touch|use|operat|switch|flame|spark|light|match|lighter|appliance|electric|anything)')
+    $noSpark = ($r -match $script:RxNoSpark)
     foreach ($k in @($Kinds)) {
         switch ($k) {
             'gas' { if (-not ($has911 -and $leave -and $noSpark)) { $missing += $k } }
@@ -385,7 +449,7 @@ function Invoke-AgentTurn {
     $conv = Read-Conversation $ConversationId
     $kindsNow = @(Find-EmergencyKinds $TenantText)
     $strongNow = @($kindsNow | Where-Object { $_ -ne 'water_electrical' })
-    $reply = $null; $source = 'model'; $stop = $null; $errorCode = $null; $mode = 'full'; $rounds = 0
+    $reply = $null; $source = 'model'; $stop = $null; $errorCode = $null; $mode = 'full'; $rounds = 0; $touched = @()
 
     try {
         $prompt = Get-SystemPrompt -AllowChange $S.AllowPromptChange
@@ -417,6 +481,7 @@ function Invoke-AgentTurn {
                 foreach ($b in ($blocks | Where-Object { $_.type -ceq 'tool_use' })) {
                     $name = [string]$b.name
                     $res = Invoke-AgentTool -Name $name -ToolInput $b.input -Audience 'tenant' -ConversationId $ConversationId
+                    if ($name -ceq 'draft_ticket_update' -and $res['ok'] -and $res['data'] -and $res['data']['proposal_id']) { $touched += [string]$res['data']['proposal_id'] }
                     $results += [ordered]@{ type = 'tool_result'; tool_use_id = [string]$b.id; content = (Get-ToolResultText $res); is_error = (-not [bool]$res['ok']) }
                 }
                 $messages += [ordered]@{ role = 'user'; content = @($results) }
@@ -458,6 +523,8 @@ function Invoke-AgentTurn {
         Add-TraceEvent $ConversationId ([ordered]@{ event = 'failsafe_reply'; reason = $errorCode; kinds = @($kinds); guards = @($guards) })
     }
     $store = Add-ConversationMessage -ConversationId $ConversationId -Role 'assistant' -Text $reply -Source $source
+    # after the reply is stored: record what it really said next to what the proposals claim (never alters the reply)
+    if ($touched.Count -gt 0) { try { Set-ProposalReplyCheck -ProposalIds $touched -Reply $reply -Source $source } catch { Add-TraceEvent $ConversationId ([ordered]@{ event = 'reply_check_error'; message = (Remove-Secrets $_.Exception.Message $S) }) } }
     try { Set-ConversationFields -ConversationId $ConversationId -Fields @{ facts = (Get-ConversationFacts (Read-Conversation $ConversationId)) } } catch { }
     return [ordered]@{
         ok = $store.ok; reply = $reply; source = $source; error_code = $errorCode; stop_reason = $stop

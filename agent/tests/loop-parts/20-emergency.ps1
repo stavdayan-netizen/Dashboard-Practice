@@ -44,6 +44,58 @@ Queue @((Resp @((T $liveFirst))))
 $r = Turn $cg3 'I smell gas in the kitchen near the furnace.'
 Assert (($r.source -ceq 'failsafe') -and ($r.guards -contains 'emergency_guard:gas') -and ($r.reply -like '*switches*') -and ($r.reply -like '*911*')) 'a gas reply that leaves out the no-spark instruction is replaced by the fixed safety message'
 
+Section 'proposal reply check: claims about instructions are compared with the real tenant reply'
+function Props([string]$C) { return , @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $C }) }
+$claimText = 'Tenant reports a gas smell in the kitchen near the furnace. Emergency instructions given: leave immediately, avoid switches and flames, call 911 from a safe location, and contact the property manager once safe.'
+# 1. a reply that passes the bar but leaves out what the proposal claims (manager contact)
+$ck1 = NewConv 'HV-004'
+$replyA = 'Please leave right now without touching any switches or appliances, and call 911 from outside. Do not go back in until responders say it is safe.'
+Queue @((Resp @((Tu 'toolu_c1' 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency'; summary = $claimText }; reason = 'Path C.' })) 'tool_use'), (Resp @((T $replyA))))
+$r = Turn $ck1 'I smell gas in the kitchen near the furnace.'
+$p1 = @((Props $ck1))[0]
+Assert (($r.source -ceq 'model') -and ($r.reply -ceq $replyA)) 'the reply is delivered unchanged by the check'
+Assert (($p1.reply_check.reply_source -ceq 'model') -and (@($p1.reply_check.claimed_but_not_delivered) -contains 'contact_manager') -and (@($p1.reply_check.claimed_but_not_delivered).Count -eq 1)) 'a claim that the manager contact was given is flagged when the reply did not say it'
+Assert ((@($p1.reply_check.delivered_in_reply) -contains 'call_911') -and (@($p1.reply_check.delivered_in_reply) -contains 'leave') -and (@($p1.reply_check.delivered_in_reply) -contains 'no_spark_or_touch') -and (@($p1.reply_check.delivered_in_reply) -notcontains 'contact_manager')) 'the record lists what the reply really contained'
+Assert (($p1.proposed_fields.summary -ceq $claimText) -and ($p1.proposed_fields.emergency_flag -eq $true)) 'the agent''s proposed fields are not edited or invented by the check'
+Assert (($p1.status -ceq 'pending') -and (@($p1.history | Where-Object { $_.event -ceq 'reply_check' -and $_.by -ceq 'server' }).Count -eq 1)) 'the check is recorded in the history by the server and the proposal stays pending'
+
+# 2. the live-test case: claims switches and flames, the reply did not say it -> but the bar now replaces such a reply, so the claim is checked against the fail-safe text
+$ck2 = NewConv 'HV-004'
+Queue @((Resp @((Tu 'toolu_c2' 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency'; summary = $claimText }; reason = 'Path C.' })) 'tool_use'), (Resp @((T $liveFirst))))
+$r = Turn $ck2 'I smell gas in the kitchen near the furnace.'
+$p2 = @((Props $ck2))[0]
+Assert (($r.source -ceq 'failsafe') -and ($p2.reply_check.reply_source -ceq 'failsafe') -and (@($p2.reply_check.claimed_but_not_delivered).Count -eq 0)) 'when the reply was replaced by the fail-safe message the claims are checked against that message (all delivered)'
+
+# 3. an honest proposal (only what the tenant reported) has no claims
+$ck3 = NewConv 'HV-004'
+Queue @((Resp @((Tu 'toolu_c3' 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency'; summary = 'Tenant reports a gas smell in the kitchen near the furnace.' }; reason = 'Path C: suspected gas leak.' })) 'tool_use'), (Resp @((T $SAFE_GAS))))
+$r = Turn $ck3 'I smell gas in the kitchen near the furnace.'
+$p3 = @((Props $ck3))[0]
+Assert ((@($p3.reply_check.claimed_in_proposal).Count -eq 0) -and (@($p3.reply_check.claimed_but_not_delivered).Count -eq 0)) 'a proposal that only reports what the tenant said makes no claims'
+
+# 4. a false claim about 911 is caught
+$ck4 = NewConv 'HV-004'
+$replyB = 'Please leave right now and do not touch any switches or appliances. Once you are safe, contact your property manager.'
+Queue @((Resp @((Tu 'toolu_c4' 'draft_ticket_update' @{ fields = @{ ai_urgency = 'Emergency'; notes = 'Tenant was told to call 911.' }; reason = 'Path C.' })) 'tool_use'), (Resp @((T $replyB))))
+$r = Turn $ck4 'I smell gas in the kitchen.'
+$p4 = @((Props $ck4))[0]
+if ($r.source -ceq 'model') { Assert (@($p4.reply_check.claimed_but_not_delivered) -contains 'call_911') 'a claim that 911 was recommended is flagged when the reply did not say it' }
+else { Assert (@($p4.reply_check.claimed_but_not_delivered).Count -eq 0 -and $p4.reply_check.reply_source -ceq 'failsafe') 'a reply without 911 is replaced and the claim is then true' }
+
+# 5. decided proposals and unrelated turns are never touched; the tenant view has no proposals
+$ck5 = NewConv 'HV-004'
+Queue @((Resp @((Tu 'toolu_c5' 'draft_ticket_update' @{ fields = @{ notes = 'Tenant was advised to leave.' }; reason = 'x' })) 'tool_use'), (Resp @((T 'Hi! Please leave the area now.'))))
+$r = Turn $ck5 'Hello'
+$p5 = @((Props $ck5))[0]
+$ap5 = Set-ProposalState -Audience 'manager' -ProposalId $p5.id -Action 'approve'
+$bytes5 = [System.IO.File]::ReadAllText((Get-ProposalPath $p5.id))
+Set-ProposalReplyCheck -ProposalIds @($p5.id) -Reply 'anything' -Source 'model'
+Assert ([System.IO.File]::ReadAllText((Get-ProposalPath $p5.id)) -ceq $bytes5) 'an approved proposal is never modified by the check'
+$tv5 = Get-ConversationView -ConversationId $ck5 -Audience 'tenant'
+Assert (-not ((ConvertTo-Json $tv5 -Depth 8) -like '*reply_check*')) 'the tenant never sees the check'
+Assert ((Get-DeliveredGuidance '').Count -eq 0 -and (Get-ClaimedGuidance 'The dishwasher is not draining.').Count -eq 0) 'empty and unrelated text produce nothing'
+Assert (@(Get-ClaimedGuidance 'Tenant was instructed to leave and not to touch switches.') -contains 'leave') 'helper: a sentence with a given-cue and an instruction topic is a claim'
+
 $liveScript = [System.IO.File]::ReadAllText((Join-Path $root 'agent\Run-LiveTest.ps1'))
 $mi = $liveScript.IndexOf('Manual guidance tool used')
 Assert (($mi -gt 0) -and $liveScript.Substring([Math]::Max(0, $mi - 400), 400).Contains("if (`$Scenario -cne 'gas')")) 'the live-test report does not show the manual-tool line for the gas scenario'
