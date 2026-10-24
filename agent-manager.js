@@ -59,6 +59,8 @@
         const kinds = Array.isArray(t.kinds) && t.kinds.length ? " for " + t.kinds.join(", ") : "";
         const guards = Array.isArray(t.guards) && t.guards.length ? " (guard: " + t.guards.join(", ") + ")" : "";
         notes.push("Fixed safety or fail-safe message used" + kinds + ": " + (t.reason || "model path failed") + guards);
+      } else if (t.event === "emergency_proposal_fallback") {
+        notes.push("The server drafted the emergency proposal because the assistant had not (emergency check" + (Array.isArray(t.kinds) && t.kinds.length ? ": " + t.kinds.join(", ") : "") + ")");
       } else if (t.event === "model_call_failed") {
         notes.push("A model call failed: " + (t.code || "unknown") + " (" + (t.attempts || 1) + " attempt(s))");
       } else if (t.event === "turn_error" || t.event === "reply_check_error") {

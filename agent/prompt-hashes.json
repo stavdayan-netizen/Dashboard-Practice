@@ -2,5 +2,5 @@
     "schema":  "prompt-hashes.v1",
     "note":  "SHA-256 of each prompt block after normalizing line endings to LF. Updated only after the owner approves a prompt change.",
     "base_sha256":  "f199ec78001c9fbc7e29e223bfb33d2d3c9a59bcb0ff8d0137e55372158aa00b",
-    "addendum_sha256":  "585b074d41e7605eff41de893e866cb26be992d317ca60b524a0148a5a9ef0d1"
+    "addendum_sha256":  "40f732c7051e75323185636886c600ea244caa526c985e7dc6a8dbe5a7f96300"
 }

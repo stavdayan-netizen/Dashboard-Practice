@@ -25,6 +25,7 @@ A tenant submits a dishwasher problem. The assistant replies on its own, drafts 
 - pass: the manager approves the proposal
 - pass: approving changes nothing on the stored ticket (priority and status untouched)
 - pass: a second decision on the same proposal is refused (409)
+- pass: the tenant's original text is kept whole, the short label is a piece of it, and no summary was written by the assistant's conversation
 - pass: the manager side marks an approved proposal as applied
 - pass: marking it applied twice is refused (409)
 
@@ -47,6 +48,7 @@ The scripted model wrongly answers a gas report with pilot-light troubleshooting
 - pass: the manager can see that the message was a server replacement, and why
 - pass: one pending Emergency proposal with the flag and Escalated
 - pass: the reply check compares the claims with the fixed message the tenant received (all delivered)
+- pass: the summary the assistant proposed did not change the ticket (it is only a pending proposal until the manager applies it)
 
 ## S3. Smoke from an outlet
 
@@ -60,10 +62,15 @@ A model reply that tells the tenant to reset a breaker is replaced by the smoke 
 **Checks**
 
 - pass: smoke: leave and 911, no breaker advice, no claim that anyone was notified
+- pass: the model drafted nothing, so the server drafted the pending Emergency proposal (marked as the server's)
 
 ## S4. An electrical shock
 
 A reply that suggests unplugging the machine is replaced by the stay-away message.
+
+**What the manager sees**
+
+- Proposal [pending] ai_urgency=Emergency; notes=Tenant's words: "I got an electric shock from the washing machine."; summary=Emergency reported by the tenant: an electrical shock or sparks. Recognized automatically by the server's emergency check from the tenant's message; no diagnosis has been made.; emergency_flag=True; ai_handling_status=Escalated. Why: Drafted by the server, not by the assistant: the server's emergency check recognized an emergency report and this conversation had no emergency proposal. The tenant received the fixed safety message. (reply check: clean (failsafe))
 
 **What the tenant sees**
 
@@ -73,6 +80,7 @@ A reply that suggests unplugging the machine is replaced by the stay-away messag
 **Checks**
 
 - pass: shock: stay away and 911, no DIY advice
+- pass: a server-drafted Emergency proposal exists for the shock report too
 
 ## S5. Water coming through a ceiling light
 
@@ -87,6 +95,29 @@ The emergency guard covers only clear gas, fire, CO and shock reports. For water
 
 - pass: the model's own safety answer is delivered as written (no replacement)
 - pass: the Emergency proposal is still drafted and flagged
+
+## S13. A gas smell, a good safety reply, and no proposal from the assistant
+
+The scripted model answers a gas report correctly but drafts nothing. The server's emergency check confirms the emergency, so the server drafts the pending Emergency proposal from a fixed template with the tenant's own words; it applies nothing. A later emergency message adds no second proposal.
+
+**What the tenant sees**
+
+- Tenant: I smell gas in the garage next to the water heater.
+- Assistant: Please leave right now without touching any switches or appliances, and call 911 from outside. Once you are safe, contact your property manager.
+- Tenant: The smell is getting stronger.
+- Assistant: Please leave right now without touching any switches or appliances, and call 911 from outside. Once you are safe, contact your property manager.
+
+**What the manager sees**
+
+- Proposal [pending] ai_urgency=Emergency; notes=Tenant's words: "I smell gas in the garage next to the water heater."; summary=Emergency reported by the tenant: a suspected gas leak. Recognized automatically by the server's emergency check from the tenant's message; no diagnosis has been made.; emergency_flag=True; ai_handling_status=Escalated. Why: Drafted by the server, not by the assistant: the server's emergency check recognized an emergency report and this conversation had no emergency proposal. The tenant received the assistant's safety message. (reply check: clean (model))
+
+**Checks**
+
+- pass: the tenant gets exactly the assistant's safety message
+- pass: one pending, server-drafted Emergency proposal
+- pass: only a fixed template and the tenant's own words, no diagnosis
+- pass: the ticket is unchanged: nothing is applied without the manager
+- pass: a later emergency message adds no second proposal
 
 ## S6. The tenant confirms it is fixed
 

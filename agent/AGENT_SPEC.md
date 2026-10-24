@@ -267,3 +267,17 @@ HV-901 exists only in a temporary copy of the demo data created by `Run-LiveTest
 - Emergency detection, the emergency reply bar and the reply check are keyword based and catch the basic cases, not every wording.
 - Model wording varies from run to run; what is guaranteed is the server-side checks.
 - No attachments or photos in the chat.
+
+## 13. Changes after the first live portal test (2026-10-24, owner-approved)
+
+**What the live test showed** (dishwasher through the portal and the dashboard, Haiku 5.5, about $0.005, five tenant turns): the conversation was safe, but (1) the assistant reached Path B (professional service) and asked the tenant to tell the manager instead of drafting a proposal, so the manager received no proposal; (2) one reply gave three steps at once, copying a manual check that lists several actions; (3) the manual was opened for a simple first check.
+
+**Changes (all tested with mocked models; nothing yet tested live):**
+1. **Addendum revision 6** (base prompt unchanged; hash re-recorded): section D now names reaching Path B as a meaningful moment and requires `draft_ticket_update` in the same turn, with what was reported and tried, and forbids asking the tenant to pass the details on; new section I applies one step per reply to manufacturer guidance (only the first action of a check, with its precautions, per reply; no numbered lists of steps; emergency instructions exempt).
+2. **Manual delivery rule:** a matched manual topic now also returns `delivery_rule` (one action per reply). It is an internal field; the leak guard blocks a tenant reply that echoes it.
+3. **Deterministic emergency proposal fallback (no model):** when the server's existing emergency check (gas, smoke or fire, CO, shock or sparks) confirms an emergency in the tenant's message and the conversation has no emergency proposal (a rejected one does not count), the server drafts a **pending** Emergency proposal from a fixed template (the kind of emergency, "no diagnosis has been made", and the tenant's own words quoted). It is marked `origin: server_emergency_fallback`, labelled in the proposals panel and in the manager's conversation view, has its reply check, merges into an existing pending proposal (an Urgent one is raised to Emergency), and applies nothing: the manager must approve and apply it. Water near a fixture and denied reports are not covered by the check and get no fallback.
+4. **Concise issue label in the manager's ticket table** (portal tickets only): the table shows a short piece of the tenant's own words (first sentence, at most 120 characters, or cut at a word boundary), never reworded or diagnosed; the full original text stays on the ticket, in the details dialog, in the search and as a tooltip. An AI-written summary replaces the label **only after the manager approves and applies it** (the proposals panel says so); the server never changes a ticket's summary by itself.
+
+**Deferred by the owner:** an independent AI check ("second opinion") for missed escalation proposals. First the strengthened instructions are tested live (batch A0 in `agent/FINAL_LIVE_TEST_PLAN.md`).
+
+**Tests (all free):** tools 265, loop 247, routes 86, chat 138, scenarios 46 = **782**.

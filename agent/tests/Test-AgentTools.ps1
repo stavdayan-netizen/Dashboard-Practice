@@ -554,9 +554,47 @@ $job2 = Start-Job -ArgumentList $root, $store, $cr2 -ScriptBlock {
     for ($i = 1; $i -le 60; $i++) { [void](Add-ConversationMessage -ConversationId $Conv -Role $(if ($i % 2) { 'tenant' } else { 'assistant' }) -Text ("message $i " + ('y' * 300))) }
 }
 $badTok = 0; $tokReads = 0
-while ($job2.State -eq 'Running') { $tokReads++; if (-not (Test-ConversationToken $cr2 $tok2)) { $badTok++ } }
+while ($job2.State -eq 'Running') { $tokReads++; try { if (-not (Test-ConversationToken $cr2 $tok2)) { $badTok++ } } catch { $badTok++ }; Start-Sleep -Milliseconds 3 }
 [void](Receive-Job $job2 -Wait -ErrorAction SilentlyContinue); Remove-Job $job2 -Force
 Assert (($tokReads -gt 5) -and ($badTok -eq 0) -and (@((Read-Conversation $cr2).messages).Count -eq 60)) "while another process appends 60 messages, $tokReads token checks never failed (bad: $badTok) and all messages are stored"
+Section 'concise issue label: a piece of the tenant''s own words, the original kept, nothing invented, AI summaries only by approval'
+$sumCases = @(
+    'My dishwasher is not draining. There is water standing in the bottom after the last cycle.',
+    'The kitchen faucet keeps dripping',
+    'Hi. My front door lock is sticking and the key barely turns in the morning when it is cold.',
+    ('word ' * 60),
+    "   Spaces   and`nnewlines   everywhere   in this fairly short sentence   ",
+    ('x' * 300),
+    'Water! Everywhere!! Please help me now, the kitchen floor is soaked and spreading toward the living room carpet quickly.',
+    'Ok.',
+    'The bathtub drains slowly; there is paint peeling inside the tub, and also the hall light flickers when the fan runs, and also a smell'
+)
+$prefixOk = $true; $lenOk = $true
+foreach ($c in $sumCases) {
+    $s = Get-IssueSummary $c
+    $norm = ($c -replace '\s+', ' ').Trim()
+    $body = $s.TrimEnd([char]0x2026)
+    if (-not ($s.Length -gt 0 -and $norm.StartsWith($body))) { $prefixOk = $false }
+    if ($s.Length -gt 121) { $lenOk = $false }
+}
+Assert $prefixOk 'every label is a prefix of the tenant''s own text (only the end can be cut): nothing is added, reworded or diagnosed'
+Assert $lenOk 'every label is at most 120 characters plus the ellipsis'
+Assert ((Get-IssueSummary $sumCases[0]) -ceq 'My dishwasher is not draining.') 'two sentences give the first one'
+Assert ((Get-IssueSummary $sumCases[1]) -ceq 'The kitchen faucet keeps dripping') 'a short text is kept whole'
+Assert ((Get-IssueSummary $sumCases[2]).StartsWith('Hi. My front door lock')) 'a very short first sentence is joined with the next one'
+Assert (((Get-IssueSummary $sumCases[3]).EndsWith([string][char]0x2026)) -and ((Get-IssueSummary $sumCases[3]).Length -le 120)) 'a long text without a sentence end is cut at a word boundary with an ellipsis'
+$tkS = New-SubmittedTicket -Issue '  My dishwasher is not draining. There is water standing in the bottom after the last cycle.  ' -Priority 'Medium'
+$rowS = $script:Demo.Tickets[$tkS.data.ticket_id]
+Assert (($rowS.issue -ceq 'My dishwasher is not draining. There is water standing in the bottom after the last cycle.') -and ((Get-TicketExtra $tkS.data.ticket_id).PSObject -ne $null)) 'the ticket keeps the tenant''s full original text'
+$storedS = Read-JsonFile (Join-Path $ticketsDir ("tkt-$($tkS.data.ticket_id).json"))
+Assert ($storedS.extra.issue_summary -ceq 'My dishwasher is not draining.') 'the short label is stored next to the ticket'
+$listS = @((Get-SubmittedTicketList -Audience 'manager').data.tickets | Where-Object { $_.row.id -ceq $tkS.data.ticket_id })[0]
+Assert (($listS.details.issue_summary -ceq 'My dishwasher is not draining.') -and ($listS.row.issue -like '*water standing in the bottom after the last cycle.')) 'the manager list carries both the short label and the full original text'
+# an AI summary only ever becomes a proposal
+$cS = New-Conv $tkS.data.ticket_id $null
+$sumBefore = [string]$script:Demo.Tickets[$tkS.data.ticket_id].ai_summary
+$dS = Tool 'draft_ticket_update' @{ fields = @{ summary = 'The dishwasher does not drain after the filters were cleaned.' }; reason = 'Summary after the conversation.' } 'tenant' $cS
+Assert ($dS.ok -and ([string]$script:Demo.Tickets[$tkS.data.ticket_id].ai_summary -ceq $sumBefore) -and ((Read-JsonFile (Join-Path $ticketsDir ("tkt-$($tkS.data.ticket_id).json"))).extra.issue_summary -ceq 'My dishwasher is not draining.') -and ((Read-JsonFile (Get-ProposalPath $dS.data.proposal_id)).status -ceq 'pending')) 'a summary drafted by the assistant changes neither the ticket nor the label: it is only a pending proposal'
 Section 'final checks'
 Assert (Same-Hash $before (Dir-Hash $realDemo)) 'real demo/ files are byte-identical after all tests'
 Assert ($realConvBefore -ceq (@(Get-ChildItem -LiteralPath (Join-Path $root 'agent-data\conversations') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name + $_.Length + $_.LastWriteTimeUtc.Ticks }) -join ',')) 'the real agent-data/ received no test data'

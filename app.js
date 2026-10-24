@@ -679,6 +679,20 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       : "";
   }
 
+  // What the ticket table shows in the Issue column. For a request submitted through the demo tenant portal it is a short, factual label:
+  // the AI summary once the manager has approved and applied one, otherwise the short piece of the tenant's own words stored with the ticket.
+  // The original text (row.issue) is never changed; the details dialog shows it in full and the table keeps it as a tooltip.
+  function issueLabel(row) {
+    const clip = (s) => (s.length > 140 ? s.slice(0, 139).replace(/\s+\S*$/, "") + "\u2026" : s);
+    const d = DEMO_MODE && row.demo && row.demo.portal_submitted ? row.demo : null;
+    if (d) {
+      if (d.summary_approved && row.ai_summary) return clip(row.ai_summary);
+      if (d.issue_summary) return clip(d.issue_summary);
+      return clip(row.issue || "");
+    }
+    return row.issue;
+  }
+
   function renderRequestsSection(rowsForProperty) {
     const filteredRows = applyTicketFilters(rowsForProperty);
     const openRows = sortOpenRows(filteredRows.filter((r) => OPEN_STATUSES.includes(r.status)));
@@ -741,17 +755,18 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       const tr = document.createElement("tr");
       tr.tabIndex = 0;
       tr.setAttribute("role", "button");
-      tr.setAttribute("aria-label", "View details for " + row.id + ", " + row.issue);
+      tr.setAttribute("aria-label", "View details for " + row.id + ", " + issueLabel(row));
 
       const cells = [
         formatDate(row.date_created),
         row.property,
-        row.issue,
+        issueLabel(row),
         row.category
       ];
-      cells.forEach((text) => {
+      cells.forEach((text, i) => {
         const td = document.createElement("td");
         td.textContent = text;
+        if (i === 2 && text !== row.issue) td.title = row.issue; // the tenant's original text, unchanged
         tr.appendChild(td);
       });
 
@@ -788,13 +803,14 @@ DEMO-36,2026-09-23,5 Forest Hill Rd,Indigo Marsh,Front door deadbolt won't engag
       card.className = "request-card";
       card.tabIndex = 0;
       card.setAttribute("role", "button");
-      card.setAttribute("aria-label", "View details for " + row.id + ", " + row.issue);
+      card.setAttribute("aria-label", "View details for " + row.id + ", " + issueLabel(row));
 
       const top = document.createElement("div");
       top.className = "rc-top";
       const issueSpan = document.createElement("span");
       issueSpan.className = "rc-issue";
-      issueSpan.textContent = row.issue;
+      issueSpan.textContent = issueLabel(row);
+      if (issueLabel(row) !== row.issue) issueSpan.title = row.issue;
       top.appendChild(issueSpan);
       top.appendChild(badge(row.priority, PRIORITY_BADGE_CLASS));
       if (row.demo && row.demo.emergency_flag) top.appendChild(emergencyBadge());

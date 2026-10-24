@@ -144,6 +144,11 @@
   text-transform: none;
 }
 
+.agent-pp-badge--server {
+  background: var(--color-accent-light);
+  text-transform: none;
+}
+
 .agent-pp-ticket {
   text-align: left;
   min-width: 0;

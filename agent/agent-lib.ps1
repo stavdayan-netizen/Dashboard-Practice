@@ -101,9 +101,9 @@ function Test-FileThere([string]$Path) {
 function Read-JsonFile([string]$Path) {
     # The file may be swapped by another process just now; a short retry covers a momentary sharing conflict.
     $last = $null
-    for ($i = 0; $i -lt 8; $i++) {
+    for ($i = 0; $i -lt 25; $i++) {
         try { return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json) }
-        catch { $last = $_; Start-Sleep -Milliseconds 25 }
+        catch { $last = $_; Start-Sleep -Milliseconds 40 }
     }
     throw $last
 }
@@ -346,7 +346,7 @@ function Get-SubmittedTicketList {
             $ids = Get-List $t.extra 'equipment_ids'
             $out += [ordered]@{
                 row = $t.row
-                details = [ordered]@{ equipment_ids = $ids; ai_handling_status = [string](Get-Prop $t.extra 'ai_handling_status' 'Not Started'); portal_submitted = $true }
+                details = [ordered]@{ equipment_ids = $ids; ai_handling_status = [string](Get-Prop $t.extra 'ai_handling_status' 'Not Started'); issue_summary = [string](Get-Prop $t.extra 'issue_summary' ''); portal_submitted = $true }
             }
         } catch { }
     }
@@ -355,6 +355,21 @@ function Get-SubmittedTicketList {
 
 $script:SubmitPriorities = @('Low', 'Medium', 'High', 'Urgent')
 $script:MaxSubmittedTickets = 100
+
+function Get-IssueSummary([string]$Issue) {
+    # A short label for the manager's ticket table, taken from the tenant's OWN words: the first sentence (at least 10 and at most 120
+    # characters), or the text cut at a word boundary with an ellipsis. Nothing is added, reworded or diagnosed; the original text is kept
+    # unchanged on the ticket.
+    $t = ($Issue -replace '\s+', ' ').Trim()
+    $max = 120
+    $m = [regex]::Match($t, '^(.{10,' + $max + '}?[.!?])(\s|$)')
+    if ($m.Success) { return $m.Groups[1].Value }
+    if ($t.Length -le $max) { return $t }
+    $cut = $t.Substring(0, $max - 1)
+    $sp = $cut.LastIndexOf(' ')
+    if ($sp -gt 40) { $cut = $cut.Substring(0, $sp) }
+    return ($cut.TrimEnd(' ', ',', ';', ':') + [string][char]0x2026)
+}
 
 function Get-SubmittedCategory([string]$Issue) {
     # Same keyword idea as the tenant portal form (tenant.js); the manager can change it later.
@@ -411,7 +426,7 @@ function New-SubmittedTicket {
                 issue = $issueText; category = $category; priority = $Priority; status = 'New'; assigned_to = ''; date_resolved = ''
                 cost = ''; cost_date = ''; ai_summary = 'Submitted through the demo tenant portal; awaiting triage.'
             }
-            $extra = [pscustomobject][ordered]@{ equipment_ids = @(Get-SubmittedEquipmentIds $issueText); ai_handling_status = 'Not Started' }
+            $extra = [pscustomobject][ordered]@{ equipment_ids = @(Get-SubmittedEquipmentIds $issueText); ai_handling_status = 'Not Started'; issue_summary = (Get-IssueSummary $issueText) }
             Write-JsonFile (Join-Path $dir ("tkt-$id.json")) ([ordered]@{ schema = 'submitted_ticket.v1'; created_at = (Get-Stamp); row = $row; extra = $extra })
             $script:Demo.Tickets[$id] = $row
             $script:Demo.Details[$id] = $extra
@@ -743,6 +758,7 @@ function Invoke-GetEquipmentManualGuidance($In, [string]$Audience, $Conv) {
     $head['topic_matched'] = $true
     $head['guidance'] = [ordered]@{
         topic_id = $best.topic_id
+        delivery_rule = 'Give the tenant only the first action of one check per reply, with its precautions, and wait for their answer before the next action. A check that lists several actions is delivered one action at a time.'
         tenant_safe_checks = @($best.tenant_safe_checks)
         do_not_offer_to_tenants = @(@($best.professional_only_or_restricted) | ForEach-Object { [ordered]@{ text = $_.text; pages = @($_.pages) } })
         warnings = @($best.warnings)

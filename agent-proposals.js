@@ -188,7 +188,7 @@
       add("equipment_ids", "Linked equipment (added to the existing links)", ids, ids.every((x) => have.indexOf(x) >= 0), () => { patch.demo.equipment_ids = union; }, { addOnly: true });
     }
     if (typeof f.summary === "string" && f.summary.trim()) {
-      add("summary", "AI summary", f.summary, (row.ai_summary || "") === f.summary, () => { patch.fields.ai_summary = f.summary; });
+      add("summary", "AI summary (also shown as the short issue label in the ticket table)", f.summary, (row.ai_summary || "") === f.summary, () => { patch.fields.ai_summary = f.summary; patch.demo.summary_approved = true; });
     }
     if (f.status === "Resolved") {
       const closed = lists.closedStatuses.indexOf(row.status) >= 0;
@@ -348,6 +348,7 @@
     const head = el("div", "agent-pp-card-head");
     if (isEmergency(p)) head.appendChild(el("span", "agent-pp-badge agent-pp-badge--emergency", "Emergency"));
     head.appendChild(el("span", "agent-pp-badge", p.status));
+    if (p.origin === "server_emergency_fallback") head.appendChild(el("span", "agent-pp-badge agent-pp-badge--server", "Drafted by the server (emergency check)"));
     const open = el("button", "btn btn-ghost agent-pp-ticket", p.ticket_id + (row ? " – " + String(row.issue).slice(0, 70) : ""));
     open.type = "button";
     open.title = "Open the ticket and its AI conversation";

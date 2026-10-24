@@ -65,7 +65,10 @@ Assert ($p.text.Contains('Appropriate conversation closure.')) 'base prompt is c
 Assert ($p.text.Contains('## Connected mode')) 'addendum is included'
 Assert ($p.text.IndexOf('### Path C - Emergency') -lt $p.text.IndexOf('## Connected mode')) 'addendum comes after the base prompt'
 Assert ($p.text.Contains('### H. Precautions before a physical step') -and $p.text.Contains('look it up first (section A)') -and $p.text.IndexOf('### G. Output') -lt $p.text.IndexOf('### H.')) 'the addendum includes the precautions-before-physical-steps rule'
-Assert ($p.text.EndsWith('or move to professional service.')) 'addendum is complete (ends with the last rule)'
+Assert ($p.text.EndsWith('This does not limit emergency safety instructions.')) 'addendum is complete (ends with the last rule)'
+Assert ($p.text.Contains('Reaching Path B means professional service is needed') -and $p.text.Contains('call draft_ticket_update in that same turn, before you write your reply') -and $p.text.Contains('so do not ask the tenant to pass them on to the manager')) 'revision 6: reaching Path B requires a proposal in the same turn and forbids asking the tenant to relay the details'
+Assert ($p.text.Contains('you classify the issue as Urgent; you reach Path B; the tenant explicitly confirms')) 'revision 6: Path B is its own meaningful moment'
+Assert ($p.text.Contains('### I. One step per reply, also with manufacturer guidance') -and $p.text.IndexOf('### H.') -lt $p.text.IndexOf('### I.') -and $p.text.Contains('Give the tenant only the first action of the check') -and $p.text.Contains('Do not number a list of steps for the tenant to follow in one reply') -and $p.text.Contains('This does not limit emergency safety instructions')) 'revision 6: section I (one step per reply, also with manufacturer guidance) comes after H and keeps the emergency exception'
 Assert ($p.text.Contains("`n`n## Connected mode")) 'base and addendum are separated by a blank line'
 $h = Read-JsonFile (Join-Path $root 'agent\prompt-hashes.json')
 Assert (($p.base_sha256 -ceq $h.base_sha256) -and ($p.addendum_sha256 -ceq $h.addendum_sha256)) 'prompt hashes match the recorded ones'

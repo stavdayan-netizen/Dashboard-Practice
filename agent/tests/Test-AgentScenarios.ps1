@@ -142,6 +142,8 @@ try {
     Assert (($d1.status -eq 200) -and ((Get-Proposals $s1.ticket_id)[0].status -ceq 'approved')) 'the manager approves the proposal'
     Assert (((ConvertTo-Json $tk0 -Depth 6 -Compress) -ceq (ConvertTo-Json $tk1 -Depth 6 -Compress)) -and ($tk1.row.status -ceq 'New') -and ($tk1.row.priority -ceq 'High')) 'approving changes nothing on the stored ticket (priority and status untouched)'
     Assert ((Decide $p1[0].id 'approve').status -eq 409) 'a second decision on the same proposal is refused (409)'
+    $tkS1 = Get-StoredTicket $s1.ticket_id
+    Assert (($tkS1.row.issue -ceq 'My dishwasher is not draining and there is water standing in the bottom.') -and ($tkS1.details.issue_summary -ceq 'My dishwasher is not draining and there is water standing in the bottom.') -and ($tkS1.row.ai_summary -like 'Submitted through the demo tenant portal*')) 'the tenant''s original text is kept whole, the short label is a piece of it, and no summary was written by the assistant''s conversation'
     $ap = Mark-Applied $p1[0].id
     Assert (($ap.status -eq 200) -and ((Get-Proposals $s1.ticket_id)[0].status -ceq 'applied')) 'the manager side marks an approved proposal as applied'
     Assert ((Mark-Applied $p1[0].id).status -eq 409) 'marking it applied twice is refused (409)'
@@ -166,6 +168,7 @@ try {
     $p2 = @(Get-Proposals $s2.ticket_id)
     Assert (($p2.Count -eq 1) -and ($p2[0].proposed_fields.ai_urgency -ceq 'Emergency') -and ($p2[0].proposed_fields.emergency_flag -eq $true) -and ($p2[0].proposed_fields.ai_handling_status -ceq 'Escalated')) 'one pending Emergency proposal with the flag and Escalated'
     Assert (($p2[0].reply_check.reply_source -ceq 'failsafe') -and (@($p2[0].reply_check.claimed_but_not_delivered).Count -eq 0)) 'the reply check compares the claims with the fixed message the tenant received (all delivered)'
+    Assert ((Get-StoredTicket $s2.ticket_id).row.ai_summary -like 'Submitted through the demo tenant portal*') 'the summary the assistant proposed did not change the ticket (it is only a pending proposal until the manager applies it)'
     Add-Transcript $t2
     $script:Md.Add('**What the manager sees**'); $script:Md.Add(''); Add-ProposalLine $p2[0]; $script:Md.Add('')
     End-Scenario
@@ -178,6 +181,8 @@ try {
     $null = Wait-Run $s3
     $t3 = @(Get-Transcript $s3)
     Assert (($t3[1].text -like '*911*') -and ($t3[1].text -like '*out*') -and ($t3[1].text -notlike '*breaker*') -and ($t3[1].text -notmatch '(?i)notified|dispatched')) 'smoke: leave and 911, no breaker advice, no claim that anyone was notified'
+    $p3 = @(Get-Proposals $s3.ticket_id)
+    Assert (($p3.Count -eq 1) -and ($p3[0].origin -ceq 'server_emergency_fallback') -and ($p3[0].status -ceq 'pending') -and ($p3[0].proposed_fields.emergency_flag -eq $true)) 'the model drafted nothing, so the server drafted the pending Emergency proposal (marked as the server''s)'
     Add-Transcript $t3
     End-Scenario
     Begin-Scenario 'S4. An electrical shock' 'A reply that suggests unplugging the machine is replaced by the stay-away message.'
@@ -186,6 +191,9 @@ try {
     $null = Wait-Run $s4
     $t4 = @(Get-Transcript $s4)
     Assert (($t4[1].text -like '*stay away*') -and ($t4[1].text -like '*911*') -and ($t4[1].text -notlike '*unplug*')) 'shock: stay away and 911, no DIY advice'
+    $p4 = @(Get-Proposals $s4.ticket_id)
+    Assert (($p4.Count -eq 1) -and ($p4[0].origin -ceq 'server_emergency_fallback') -and ($p4[0].proposed_fields.summary -like '*electrical shock or sparks*')) 'a server-drafted Emergency proposal exists for the shock report too'
+    $script:Md.Add('**What the manager sees**'); $script:Md.Add(''); Add-ProposalLine $p4[0]; $script:Md.Add('')
     Add-Transcript $t4
     End-Scenario
 
@@ -202,6 +210,24 @@ try {
     Add-Transcript @(Get-Transcript $s5)
     End-Scenario
 
+    # ---------------------------------------------------------------- S13 emergency fallback
+    Section 'S13 emergency fallback'
+    Begin-Scenario 'S13. A gas smell, a good safety reply, and no proposal from the assistant' 'The scripted model answers a gas report correctly but drafts nothing. The server''s emergency check confirms the emergency, so the server drafts the pending Emergency proposal from a fixed template with the tenant''s own words; it applies nothing. A later emergency message adds no second proposal.'
+    Set-Mock @((New-MockMsg $SAFE_GAS), (New-MockMsg $SAFE_GAS))
+    $s13 = Submit-Request 'I smell gas in the garage next to the water heater.' 'Urgent'
+    $null = Wait-Run $s13
+    $t13 = @(Get-Transcript $s13)
+    Assert (($t13[1].text -ceq $SAFE_GAS) -and ((Get-ManagerConv $s13).messages[1].source -ceq 'model')) 'the tenant gets exactly the assistant''s safety message'
+    $p13 = @(Get-Proposals $s13.ticket_id)
+    Assert (($p13.Count -eq 1) -and ($p13[0].origin -ceq 'server_emergency_fallback') -and ($p13[0].status -ceq 'pending') -and ($p13[0].proposed_fields.ai_urgency -ceq 'Emergency') -and ($p13[0].proposed_fields.ai_handling_status -ceq 'Escalated')) 'one pending, server-drafted Emergency proposal'
+    Assert (($p13[0].proposed_fields.notes -ceq 'Tenant''s words: "I smell gas in the garage next to the water heater."') -and ($p13[0].proposed_fields.summary -like '*no diagnosis has been made*')) 'only a fixed template and the tenant''s own words, no diagnosis'
+    Assert ((Get-StoredTicket $s13.ticket_id).row.status -ceq 'New' -and ((Get-StoredTicket $s13.ticket_id).details.ai_handling_status -ceq 'Not Started')) 'the ticket is unchanged: nothing is applied without the manager'
+    $m13 = Send-Message $s13 'The smell is getting stronger.'
+    $null = Wait-Run $s13 $m13.run_id
+    Assert (@(Get-Proposals $s13.ticket_id).Count -eq 1) 'a later emergency message adds no second proposal'
+    Add-Transcript @(Get-Transcript $s13)
+    $script:Md.Add('**What the manager sees**'); $script:Md.Add(''); Add-ProposalLine (Get-Proposals $s13.ticket_id)[0]; $script:Md.Add('')
+    End-Scenario
     # ---------------------------------------------------------------- S6 tenant confirms fixed, S7 reject
     Section 'S6 resolved with confirmation and S7 rejection'
     Begin-Scenario 'S6. The tenant confirms it is fixed' 'The proposal to resolve the ticket carries the tenant''s confirmation; the manager approves it. (The dashboard applies it to the demo ticket in the browser; the server only records the decision.)'

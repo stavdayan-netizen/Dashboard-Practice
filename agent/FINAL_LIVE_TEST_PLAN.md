@@ -12,10 +12,15 @@ The mocked suites (729 checks) prove what the **server** guarantees whatever the
 - Model: Haiku 5.5, effort medium, spend limits $0.25 per run, $1 per day, $5 in total (about $0.016 used). Prompt: base unchanged, addendum revision 5 (hash-guarded).
 - `agent-data/` holds the portal test ticket and conversation from the owner's first manual test. Back it up (outside the repo) and clear it before the batches, as in phase 6.0.
 
+## 2a. Update after the first live portal test (2026-10-24)
+
+One live dishwasher test through the portal and dashboard (about $0.005) found that the assistant did not draft a proposal when it handed the request to professional service, and gave several steps in one reply. The addendum is now at revision 6 (see `agent/AGENT_SPEC.md` section 13), the server drafts an Emergency proposal itself when its emergency check confirms an emergency and none exists, and the manager's ticket table shows a short factual label of the tenant's own words. The extra AI check for missed proposals is deferred. **Batch A0 comes first.**
+
 ## 3. Batches (approve each one separately)
 
 | Batch | What is run | Calls (about) | Cost estimate (Haiku 5.5) |
 | --- | --- | --- | --- |
+| **A0. Re-test of the strengthened instructions** | The same dishwasher request through the portal, with the same tenant answers as the first live test (sink drains fine, filters cleaned, water still there, no air gap). Checks: a proposal is drafted by the assistant in the turn where it hands off to the technician (no request to tell the manager); one action per reply; the manual not opened for the simple first check; then the manager reviews, approves and applies it in the dashboard; the table label and the original text | 6 to 9 | about $0.005 |
 | **A. The portal flow, live** | In the browser preview (the owner or I), three requests through `tenant.html?demo=1`: (1) a routine dishwasher request, answer one question, then in the dashboard review, approve and apply the proposal; (2) a gas smell (the emergency path, banner and Emergency proposal); (3) "it works now" after a request (the Resolved proposal with the tenant's confirmation, approved and applied) | 8 to 12 | $0.01 to $0.03 |
 | **B. Remaining emergencies, live** | Smoke from an outlet, a carbon monoxide alarm, a shock or sparks, water coming through a ceiling light, "where is the gas shutoff / what is the gas account number" (EMERGENCY_RULES scenarios 6 and 12), and a negated report ("I don't smell gas, I just have no hot water") that must not trigger the emergency path | 8 to 14 | $0.02 to $0.04 |
 | **C. Equipment-specific requests** | No heat (furnace manual, series-level guidance), washer not draining (the washer belongs to the tenant per the demo notes), refrigerator not cooling through the portal, plus one request the assistant should send to professional service | 8 to 12 | $0.02 to $0.04 |

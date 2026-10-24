@@ -79,6 +79,39 @@ function Get-ClaimedGuidance([string]$ProposalText) {
     return @($out)
 }
 
+function Add-EmergencyFallbackProposal {
+    # Deterministic, no model: when the existing emergency check (the same one that drives the fail-safe and the reply bar) recognized an
+    # emergency in this tenant message and the conversation has no emergency proposal yet, the server drafts the Emergency proposal from
+    # a fixed template (the kind of emergency, and the tenant's own words quoted). It is only a PENDING proposal: nothing is applied
+    # without the manager. Returns the proposal id, or $null when nothing was needed or possible.
+    param($Conv, $Kinds, [string]$TenantText, [string]$ReplySource)
+    $kinds = @($Kinds | Where-Object { $_ })
+    if ($kinds.Count -eq 0 -or $null -eq $Conv) { return $null }
+    $existing = @(Get-ProposalList -Audience 'manager' | Where-Object { $_.conversation_id -ceq $Conv.id -and $_.status -cne 'rejected' })
+    foreach ($p in $existing) { if ((Get-Prop $p.proposed_fields 'ai_urgency' $null) -ceq 'Emergency' -or (Get-Prop $p.proposed_fields 'emergency_flag' $false) -eq $true) { return $null } }
+    $label = @{ gas = 'a suspected gas leak'; smoke_fire = 'smoke or fire'; co = 'a carbon monoxide alarm'; electrical = 'an electrical shock or sparks' }
+    $what = (@($kinds | ForEach-Object { if ($label.ContainsKey([string]$_)) { $label[[string]$_] } }) -join ', ')
+    if (-not $what) { return $null }
+    $fields = [ordered]@{
+        ai_urgency = 'Emergency'
+        summary = ("Emergency reported by the tenant: $what. Recognized automatically by the server's emergency check from the tenant's message; no diagnosis has been made.")
+        notes = ("Tenant's words: """ + (Get-Shortened $TenantText 300) + """")
+    }
+    $reason = 'Drafted by the server, not by the assistant: the server''s emergency check recognized an emergency report and this conversation had no emergency proposal. The tenant received ' + $(if ($ReplySource -ceq 'failsafe') { 'the fixed safety message' } else { 'the assistant''s safety message' }) + '.'
+    $res = Invoke-DraftTicketUpdate @{ fields = $fields; reason = $reason } 'tenant' $Conv
+    if (-not $res['ok'] -or -not $res['data'] -or -not $res['data']['proposal_id']) { return $null }
+    $id = [string]$res['data']['proposal_id']
+    Invoke-StoreLock {
+        $path = Get-ProposalPath $id
+        $p = Read-JsonFile $path
+        $p | Add-Member -NotePropertyName origin -NotePropertyValue 'server_emergency_fallback' -Force
+        $p.history = @($p.history) + @([ordered]@{ ts = (Get-Stamp); event = 'server_fallback'; by = 'server'; note = 'emergency proposal drafted by the server' })
+        Write-JsonFile $path $p
+    } | Out-Null
+    Add-TraceEvent $Conv.id ([ordered]@{ event = 'emergency_proposal_fallback'; kinds = @($kinds); reply_source = $ReplySource })
+    return $id
+}
+
 function Set-ProposalReplyCheck([string[]]$ProposalIds, [string]$Reply, [string]$Source) {
     # Adds a server-written record to each pending proposal drafted in this turn: what the tenant-facing reply really said
     # (the final text, including a fail-safe replacement) next to what the proposal's own text claims was said. It never edits
@@ -140,7 +173,7 @@ function ConvertTo-PlainReply([string]$Text) {
 function Test-ReplyLeak([string]$Reply, $Settings) {
     # Returns a short reason if the reply contains something that must never reach a tenant.
     foreach ($n in $script:ToolNames) { if ($Reply.Contains($n)) { return 'tool_name' } }
-    if ($Reply -match '(?i)proposal_id|tool_use|tool_result|exact_model_guidance|guidance_scope|do_not_offer|"ok"\s*:\s*(true|false)|not_available|conversation_required') { return 'internal_marker' }
+    if ($Reply -match '(?i)proposal_id|tool_use|tool_result|exact_model_guidance|guidance_scope|do_not_offer|delivery_rule|"ok"\s*:\s*(true|false)|not_available|conversation_required') { return 'internal_marker' }
     if ($Reply -match 'sk-ant-') { return 'credential' }
     if ($Settings -and $Settings.ApiKey -and $Reply.Contains($Settings.ApiKey)) { return 'credential' }
     return $null
@@ -533,6 +566,11 @@ function Invoke-AgentTurn {
         Add-TraceEvent $ConversationId ([ordered]@{ event = 'failsafe_reply'; reason = $errorCode; kinds = @($kinds); guards = @($guards) })
     }
     $store = Add-ConversationMessage -ConversationId $ConversationId -Role 'assistant' -Text $reply -Source $source
+    # emergency confirmed by the existing server check and no emergency proposal yet: the server drafts a pending one (no model, nothing applied)
+    if ($strongNow.Count -gt 0) {
+        try { $fbId = Add-EmergencyFallbackProposal -Conv (Read-Conversation $ConversationId) -Kinds $strongNow -TenantText $TenantText -ReplySource $source; if ($fbId) { $touched += $fbId } }
+        catch { Add-TraceEvent $ConversationId ([ordered]@{ event = 'emergency_fallback_error'; message = (Remove-Secrets $_.Exception.Message $S) }) }
+    }
     # after the reply is stored: record what it really said next to what the proposals claim (never alters the reply)
     if ($touched.Count -gt 0) { try { Set-ProposalReplyCheck -ProposalIds $touched -Reply $reply -Source $source } catch { Add-TraceEvent $ConversationId ([ordered]@{ event = 'reply_check_error'; message = (Remove-Secrets $_.Exception.Message $S) }) } }
     try { Set-ConversationFields -ConversationId $ConversationId -Fields @{ facts = (Get-ConversationFacts (Read-Conversation $ConversationId)) } } catch { }
