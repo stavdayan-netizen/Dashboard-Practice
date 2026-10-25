@@ -40,4 +40,4 @@ Turn on live calls (your own machine, your own key):
 2. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Check-AgentSetup.ps1 -VerifyModels`
 3. `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Run-LiveTest.ps1 -Scenario dishwasher` (shows the plan), then add `-Confirm` to run it.
 
-Conversations, proposals, run files and the spend ledger are written under `agent-data/` (ignored by git). The full rules are in `SPEC.MD` ("Stage 4 implementation", "Stage 5 implementation") and `Architecture.md`.
+Conversations, proposals, run files and the spend ledger are written under `agent-data/` (ignored by git). The full rules are in `SPEC.md` ("Stage 4 implementation", "Stage 5 implementation") and `Architecture.md`.

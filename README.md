@@ -1,6 +1,33 @@
 # Dashboard Practice
 
-A single-page **Tenant Maintenance Dashboard** demo for a property manager, built per [SPEC.MD](SPEC.MD). Plain HTML/CSS/JS, no build step, no backend, no API keys. Sample data only — it does not connect to Zillow, TurboTenant, tenants, or any AI model.
+A single-page **Tenant Maintenance Dashboard** demo for a property manager, built per [SPEC.md](SPEC.md). Plain HTML/CSS/JS, no build step, no backend for the dashboard itself. Sample data only — it does not connect to Zillow, TurboTenant or real tenants. The separate local-only AI Maintenance Assistant (below) calls the Anthropic API only when the owner enables it.
+
+## Course submission: Tasks 3, 4 and 5 (AI Maintenance Assistant)
+
+Repository: <https://github.com/stavdayan-netizen/Dashboard-Practice>
+
+| Task | Where |
+| --- | --- |
+| **Task 3, Agent Design** (how it works, tools, memory) | [SPEC.md](SPEC.md), section "AI Maintenance Agent" (purpose, prompt, tools, memory, model settings, safety, limits, tests) |
+| **Task 4, Architecture** (trigger, output, complete information-flow diagram) | [Architecture.md](Architecture.md): Mermaid information-flow diagram (section 2), trigger (section 3), output (section 4) |
+| **Task 5, Bonus: Working Agent** | **Bonus completed, as a local demo.** The agent is built and runs end to end on Claude (Anthropic Messages API with tool use). Details below |
+
+**What was built.** A tenant-facing maintenance assistant. A tenant submits a request in the demo portal; the assistant opens the conversation, classifies the issue (Routine, Urgent, Emergency), guides safe self-troubleshooting one step at a time or hands off to professional service, and drafts a proposed ticket update that the property manager approves or rejects in the dashboard. The agent cannot change a ticket itself.
+
+**Model and settings.** `claude-haiku-5-5` by default (`claude-sonnet-5-5` selectable, not tested live); effort `medium`; no sampling parameters; 6 tool rounds, 4096 output tokens per call, 90 s per run; spend limits $0.25 per run, $1 per day, $5 in total. Full table: SPEC.md section 7.
+
+**Tools.** `get_ticket_details`, `get_equipment_info`, `get_maintenance_history`, `get_equipment_manual_guidance` (read only) and `draft_ticket_update` (writes only a pending proposal). SPEC.md section 5.
+
+**Prompt.** [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md) (the Playground-tested base prompt, verbatim) plus [`agent/system-prompt.connected-addendum.md`](agent/system-prompt.connected-addendum.md) (revision 6), both hash-guarded by `agent/prompt-hashes.json`.
+
+**Honest status and limits.**
+
+- It is **not** an Anthropic Platform hosted agent and **not** a Make scenario: it is PowerShell code calling the Messages API, running **locally** (`localhost`) on fictional "10 Harbor View" data. It is not deployed publicly and not connected to Airtable, Make or e-mail.
+- There is **no sign-in**; the manager routes are not a security boundary. Real authentication and authorization are required before any real-world deployment.
+- Tested with five free mocked suites (784 checks) and live runs on Haiku 5.5 (about $0.03 in total): dishwasher, refrigerator, dishwasher filter, gas, the portal flow and a carbon monoxide alarm. Sonnet 5.5, the other emergency scenarios and a long real-model conversation were not run live (plan: `agent/FINAL_LIVE_TEST_PLAN.md`).
+- Live use needs the owner's own API key in a git-ignored `.env` (never committed).
+
+**Run it locally.** Copy `.env.example` to `.env` and add your own key (see `agent/README.md`), start `serve.ps1`, open `http://localhost:<port>/tenant.html?demo=1` and `index.html?demo=1`. Check the setup without any API call: `powershell -NoProfile -ExecutionPolicy Bypass -File agent\Check-AgentSetup.ps1`. Run a suite: `powershell -NoProfile -ExecutionPolicy Bypass -File agent\tests\Test-AgentTools.ps1`.
 
 ## Stack
 
@@ -137,9 +164,9 @@ Also demo mode only (the real dashboard keeps its four statuses and current layo
 
 **Add history event** (and **Edit event** on an existing one) records something with no ticket, such as a purchase, installation or inspection, and can hold several **photos** (images) and **receipts, invoices and other documents** (PDF or images). Each file can be viewed, downloaded and removed; files are shown right in the history entry, hidden from the Tenant preview, kept in the browser's IndexedDB so they survive a reload, and only stored when you save. Deleting an event or its equipment deletes the files.
 
-### AI agent safety rules (documentation only)
+### AI agent safety rules
 
-The AI Maintenance Agent is not built or connected. Its emergency and safety rules (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) are written in [`agent/EMERGENCY_RULES.md`](agent/EMERGENCY_RULES.md), with twelve test scenarios, the conversation paths, planned tools and functional tests are in [`agent/AGENT_SPEC.md`](agent/AGENT_SPEC.md), and a draft system prompt is in [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md). The system architecture and data flows for the planned local agent are in [`Architecture.md`](Architecture.md). Nothing there needs an account or a key yet.
+The AI Maintenance Agent is built as a local demo (see the submission section above); it is not deployed or connected to the real dashboard data. Its emergency and safety rules (automatic flagging and escalation, immediate tenant safety guidance, forbidden advice, manager review that never delays safety) are written in [`agent/EMERGENCY_RULES.md`](agent/EMERGENCY_RULES.md), with twelve test scenarios, the conversation paths, planned tools and functional tests are in [`agent/AGENT_SPEC.md`](agent/AGENT_SPEC.md), and a draft system prompt is in [`agent/system-prompt.draft.md`](agent/system-prompt.draft.md). The system architecture and data flows for the planned local agent are in [`Architecture.md`](Architecture.md). Nothing there needs an account or a key yet.
 
 The `demo/` folder holds the fictional records behind it. See `demo/README.md` for the data structure, the allowed values and how each file maps to a future Airtable table.
 
